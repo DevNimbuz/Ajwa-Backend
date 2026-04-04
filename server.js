@@ -39,12 +39,21 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
 // CORS — allow frontend domain
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'http://localhost:3000',
-    'https://www.flyajwa.com',
-    'https://flyajwa.com',
-  ],
+  origin: function (origin, callback) {
+    const allowed = [
+      'http://localhost:3000',
+      'https://www.flyajwa.com',
+      'https://flyajwa.com',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean);
+
+    // Allow Vercel preview deployments (*.vercel.app)
+    if (!origin || allowed.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
