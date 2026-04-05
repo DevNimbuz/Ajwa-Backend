@@ -19,10 +19,11 @@ const { getClientIP, detectDevice } = require('../middleware/security');
  * Utility: Set secure HttpOnly cookie
  */
 const setTokenCookie = (res, token) => {
+  const isProd = process.env.NODE_ENV === 'production';
   res.cookie('token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'Lax', // Allows navigation from external but prevents CSRF
+    secure: isProd,                      // HTTPS only in production
+    sameSite: isProd ? 'None' : 'Lax',  // None = cross-domain (Vercel → Render)
     // No 'expires' or 'Max-Age' -> Session Cookie (clears on browser close)
   });
 };
