@@ -24,6 +24,9 @@ const { sanitizeBody } = require('./middleware/security');
 // ── Initialize Express ──
 const app = express();
 
+// Trust Render/Vercel reverse proxy (fixes express-rate-limit X-Forwarded-For error)
+app.set('trust proxy', 1);
+
 // Enable Gzip Compression (huge performance boost on JSON responses)
 app.use(compression());
 
