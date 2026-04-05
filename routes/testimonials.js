@@ -2,20 +2,17 @@ const express = require('express');
 const router = express.Router();
 const Testimonial = require('../models/Testimonial');
 const { requireAuth } = require('../middleware/auth');
-const sharp = require('sharp');
-const path = require('path');
-const fs = require('fs');
 const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
 
-// Ensure upload directory exists
-const uploadDir = path.join(__dirname, '../public/uploads/avatars');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
-const storage = multer.memoryStorage();
 const upload = multer({ 
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
@@ -30,16 +27,15 @@ router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const fileName = `avatar-${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`;
-    const filePath = path.join(uploadDir, fileName);
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'flyajwa/avatars', resource_type: 'image', format: 'webp', quality: 'auto:good', width: 200, height: 200, crop: 'fill' },
+        (error, result) => { if (error) reject(error); else resolve(result); }
+      );
+      stream.end(req.file.buffer);
+    });
 
-    await sharp(req.file.buffer)
-      .resize({ width: 200, height: 200, fit: 'cover' })
-      .webp({ quality: 80 })
-      .toFile(filePath);
-
-    const url = `/uploads/avatars/${fileName}`;
-    res.json({ success: true, data: { url } });
+    res.json({ success: true, data: { url: result.secure_url } });
   } catch (error) {
     console.error('[Avatar Upload Error]', error.message);
     res.status(500).json({ success: false, message: 'Upload failed' });
@@ -117,13 +113,8 @@ router.delete('/:id', requireAuth, async (req, res) => {
     const doc = await Testimonial.findById(req.params.id);
     if (!doc) return res.status(404).json({ success: false, message: 'Not found' });
 
-    // Remove avatar from disk if it's a local upload
-    if (doc.avatarUrl && doc.avatarUrl.startsWith('/uploads/avatars/')) {
-      const filePath = path.join(__dirname, '../public', doc.avatarUrl);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
+    // Note: Cloudinary avatars are not deleted automatically here to save API limits.
+    // They are tiny and not a concern on the free tier.
 
     await Testimonial.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Deleted' });

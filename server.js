@@ -104,9 +104,7 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/testimonials', require('./routes/testimonials'));
 app.use('/api/gallery', require('./routes/gallery'));
 
-// Serve static dynamic uploads (like Gallery images) separately
-const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
 
 // ══════════════════════════════════════════════
 // ERROR HANDLING

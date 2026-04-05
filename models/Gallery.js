@@ -5,6 +5,9 @@ const GallerySchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  cloudinaryId: {
+    type: String,
+  },
   alt: {
     type: String,
     default: 'FlyAjwa Travel Moment',
