@@ -137,4 +137,27 @@ const requireAnyAdmin = async (req, res, next) => {
   return res.status(403).json({ success: false, message: 'Access denied — Admin only' });
 };
 
-module.exports = { requireAuth, requireSuperAdmin, requireAnyAdmin };
+/**
+ * Middleware: Require CUSTOMER role (traveler)
+ * Must be used AFTER requireAuth
+ */
+const requireCustomer = async (req, res, next) => {
+  if (req.user && req.user.role === 'CUSTOMER') {
+    return next();
+  }
+
+  await AuditLog.create({
+    action: 'PERMISSION_DENIED',
+    user: req.user?._id,
+    email: req.user?.email,
+    ip: getClientIP(req),
+    userAgent: req.headers['user-agent'] || 'unknown',
+    device: detectDevice(req.headers['user-agent']),
+    category: 'HAZARD',
+    reason: `Forbidden: Non-customer role attempted to access traveler resource [${req.originalUrl}]`
+  });
+
+  return res.status(403).json({ success: false, message: 'Access denied — Travelers only' });
+};
+
+module.exports = { requireAuth, requireSuperAdmin, requireAnyAdmin, requireCustomer };

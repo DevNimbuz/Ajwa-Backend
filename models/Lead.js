@@ -93,6 +93,11 @@ const LeadSchema = new mongoose.Schema({
     ref: 'User',
     default: null,
   },
+  customer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
   notes: [NoteSchema], // Conversation log
   // ── UTM Tracking ──
   utmSource: String,

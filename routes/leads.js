@@ -2,7 +2,7 @@
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * FlyAjwa — Lead Routes
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * POST   /api/leads              — Submit new lead (public, rate limited)
+ * POST   /api/leads              — Submit new lead (public, rate limited) | Logged in customers auto-linked
  * GET    /api/leads              — List leads with filters (admin)
  * GET    /api/leads/analytics    — Lead statistics (admin)
  * GET    /api/leads/export       — Export leads as CSV (admin)
@@ -15,6 +15,7 @@ const router = express.Router();
 const Lead = require('../models/Lead');
 const Package = require('../models/Package');
 const AuditLog = require('../models/AuditLog');
+const User = require('../models/User');
 const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
 const { getClientIP, detectDevice } = require('../middleware/security');
 const { leadLimiter } = require('../middleware/rateLimiter');
@@ -81,8 +82,25 @@ router.post('/', [
       return res.status(400).json({ success: false, message: 'Please enter a valid phone number' });
     }
 
+    // Bind to customer if logged in
+    let customerId = null;
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        const jwt = require('jsonwebtoken');
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id);
+        if (user && user.role === 'CUSTOMER') {
+          customerId = user._id;
+        }
+      }
+    } catch (e) {
+      // Not logged in or invalid token - continue without customer link
+    }
+
     // Create the lead
-    const lead = await Lead.create({
+    const leadData = {
       name: name.trim(),
       email: email?.trim(),
       phone: cleanPhone,
@@ -94,7 +112,13 @@ router.post('/', [
       serviceDetails,
       selectedDays, selectedFlight, selectedHotelStar, selectedGroupSize, quotedPrice,
       utmSource, utmMedium, utmCampaign, referrer,
-    });
+    };
+
+    if (customerId) {
+      leadData.customer = customerId;
+    }
+
+    const lead = await Lead.create(leadData);
 
     // Broadcast real-time notification to admin panels
     broadcastLead(lead);

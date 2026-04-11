@@ -143,6 +143,67 @@ router.post('/login', [
 });
 
 // ══════════════════════════════════════════════
+// POST /api/auth/register — Customer registration
+// ══════════════════════════════════════════════
+router.post('/register', [
+  body('email').isEmail().withMessage('Enter a valid email address').normalizeEmail(),
+  body('password').notEmpty().withMessage('Password is required'),
+  body('name').trim().notEmpty().withMessage('Name is required'),
+  body('phone').trim().notEmpty().withMessage('Phone number is required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0].msg });
+    }
+
+    const { email, password, name, phone } = req.body;
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'An account with this email already exists' });
+    }
+
+    const crypto = require('crypto');
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
+    const user = await User.create({
+      email,
+      password,
+      name,
+      phone,
+      role: 'CUSTOMER',
+      isVerified: true,
+      verificationToken,
+    });
+
+    await AuditLog.create({
+      action: 'USER_REGISTRATION',
+      user: user._id,
+      email: user.email,
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || 'unknown',
+      device: detectDevice(req.headers['user-agent']),
+      category: 'SYSTEM',
+      reason: 'New customer account registered'
+    });
+
+    const token = user.generateToken();
+    setTokenCookie(res, token);
+
+    res.status(201).json({
+      success: true,
+      message: 'Account created successfully',
+      token,
+      user: user.toSafeJSON(),
+    });
+  } catch (error) {
+    console.error('[Auth] Register error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
 // POST /api/auth/logout — Clear cookie
 // ══════════════════════════════════════════════
 router.post('/logout', (req, res) => {
@@ -197,6 +258,163 @@ router.delete('/logs', requireAuth, async (req, res) => {
     res.json({ success: true, message: 'Audit logs cleared successfully' });
   } catch (error) {
     console.error('[Auth] Clear logs error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// GET /api/auth/wishlist — Get customer's wishlist
+// ══════════════════════════════════════════════
+router.get('/wishlist', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'CUSTOMER') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const user = await User.findById(req.user._id)
+      .populate('wishlist', 'slug name title heroImg startingPrice defaultDuration');
+
+    res.json({ success: true, data: user.wishlist });
+  } catch (error) {
+    console.error('[Auth] Wishlist error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// POST /api/auth/wishlist/:packageId — Add to wishlist
+// ══════════════════════════════════════════════
+router.post('/wishlist/:packageId', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'CUSTOMER') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const Package = require('../models/Package');
+    const pkg = await Package.findById(req.params.packageId);
+    if (!pkg) {
+      return res.status(404).json({ success: false, message: 'Package not found' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user.wishlist.includes(req.params.packageId)) {
+      user.wishlist.push(req.params.packageId);
+      await user.save();
+
+      await AuditLog.create({
+        action: 'WISHLIST_ADD',
+        user: user._id,
+        email: user.email,
+        ip: getClientIP(req),
+        userAgent: req.headers['user-agent'] || 'unknown',
+        device: detectDevice(req.headers['user-agent']),
+        category: 'SUCCESS',
+        reason: `Added "${pkg.name}" to wishlist`,
+        metadata: { packageId: pkg._id, packageName: pkg.name }
+      });
+    }
+
+    res.json({ success: true, message: 'Added to wishlist' });
+  } catch (error) {
+    console.error('[Auth] Wishlist add error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// DELETE /api/auth/wishlist/:packageId — Remove from wishlist
+// ══════════════════════════════════════════════
+router.delete('/wishlist/:packageId', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'CUSTOMER') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const user = await User.findById(req.user._id);
+    user.wishlist = user.wishlist.filter(
+      id => id.toString() !== req.params.packageId
+    );
+    await user.save();
+
+    res.json({ success: true, message: 'Removed from wishlist' });
+  } catch (error) {
+    console.error('[Auth] Wishlist remove error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// PUT /api/auth/profile — Update customer profile
+// ══════════════════════════════════════════════
+router.put('/profile', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'CUSTOMER') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const { name, phone, profile } = req.body;
+    const update = {};
+
+    if (name) update.name = name.trim();
+    if (phone !== undefined) update.phone = phone?.trim();
+    if (profile) {
+      if (profile.dob !== undefined) update['profile.dob'] = profile.dob;
+      if (profile.address !== undefined) update['profile.address'] = profile.address?.trim();
+      if (profile.passportNo !== undefined) update['profile.passportNo'] = profile.passportNo?.trim();
+      if (profile.passportExpiry !== undefined) update['profile.passportExpiry'] = profile.passportExpiry;
+      if (profile.mealPreference !== undefined) update['profile.mealPreference'] = profile.mealPreference;
+      if (profile.seatPreference !== undefined) update['profile.seatPreference'] = profile.seatPreference;
+    }
+
+    const user = await User.findByIdAndUpdate(req.user._id, update, { new: true });
+
+    await AuditLog.create({
+      action: 'PROFILE_UPDATE',
+      user: user._id,
+      email: user.email,
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || 'unknown',
+      device: detectDevice(req.headers['user-agent']),
+      category: 'CAUTION',
+      reason: 'Customer updated their profile'
+    });
+
+    res.json({ success: true, user: user.toSafeJSON() });
+  } catch (error) {
+    console.error('[Auth] Profile update error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// GET /api/auth/ustomer-trips — Get customer's trips and inquiries
+// ══════════════════════════════════════════════
+router.get('/trips', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'CUSTOMER') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const Lead = require('../models/Lead');
+    const Package = require('../models/Package');
+
+    const leads = await Lead.find({ customer: req.user._id })
+      .populate('assignedTo', 'name email')
+      .sort({ createdAt: -1 });
+
+    const bookedLeads = leads.filter(l => l.status === 'BOOKED');
+    const activeLeads = leads.filter(l => ['NEW', 'CONTACTED', 'INTERESTED', 'QUOTED'].includes(l.status));
+
+    res.json({ 
+      success: true, 
+      data: {
+        all: leads,
+        booked: bookedLeads,
+        active: activeLeads,
+      }
+    });
+  } catch (error) {
+    console.error('[Auth] Trips error:', error.message);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

@@ -2,8 +2,9 @@
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * FlyAjwa — User/Team Management Routes
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * All routes require SUPER_ADMIN role
- * GET    /api/users         — List team members
+ * All routes require AUTH
+ * GET    /api/users         — List team members (admin)
+ * GET    /api/users/customers — List customers (admin)
  * POST   /api/users         — Create team member
  * PUT    /api/users/:id     — Update team member
  * DELETE /api/users/:id     — Delete team member
@@ -12,19 +13,20 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const Lead = require('../models/Lead');
 const AuditLog = require('../models/AuditLog');
-const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
+const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../middleware/auth');
 const { getClientIP, detectDevice } = require('../middleware/security');
 
-// All routes require super admin
-router.use(requireAuth, requireSuperAdmin);
+// All routes require authentication
+router.use(requireAuth);
 
 // ══════════════════════════════════════════════
 // GET /api/users — List all team members
 // ══════════════════════════════════════════════
-router.get('/', async (req, res) => {
+router.get('/', requireAnyAdmin, async (req, res) => {
   try {
-    const users = await User.find().select('-password').sort({ createdAt: -1 });
+    const users = await User.find({ role: { $in: ['SUPER_ADMIN', 'TEAM'] } }).select('-password').sort({ createdAt: -1 });
     res.json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
@@ -32,9 +34,107 @@ router.get('/', async (req, res) => {
 });
 
 // ══════════════════════════════════════════════
-// POST /api/users — Create new team member
+// GET /api/users/customers — List registered customers
 // ══════════════════════════════════════════════
-router.post('/', async (req, res) => {
+router.get('/customers', requireAnyAdmin, async (req, res) => {
+  try {
+    const { search, page = 1, limit = 20 } = req.query;
+    const query = { role: 'CUSTOMER' };
+    
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const customers = await User.find(query)
+      .select('-password -tokenVersion -verificationToken')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await User.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: customers,
+      pagination: { page: parseInt(page), pages: Math.ceil(total / limit), total }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// GET /api/users/customers/:id — Get customer with their leads
+// ══════════════════════════════════════════════
+router.get('/customers/:id', requireAnyAdmin, async (req, res) => {
+  try {
+    const customer = await User.findById(req.params.id)
+      .select('-password -tokenVersion -verificationToken');
+    
+    if (!customer || customer.role !== 'CUSTOMER') {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    const leads = await Lead.find({ customer: customer._id })
+      .populate('assignedTo', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: { customer, leads }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// PUT /api/users/customers/:id — Upload document to customer vault
+// ══════════════════════════════════════════════
+router.put('/customers/:id', requireAnyAdmin, async (req, res) => {
+  try {
+    const { name, url, type } = req.body;
+    const customer = await User.findById(req.params.id);
+    
+    if (!customer || customer.role !== 'CUSTOMER') {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    customer.documents.push({
+      name,
+      url,
+      type: type || 'other',
+      uploadedAt: new Date()
+    });
+    await customer.save();
+
+    await AuditLog.create({
+      action: 'USER_MUTATION',
+      user: req.user._id,
+      email: req.user.email,
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || 'unknown',
+      device: detectDevice(req.headers['user-agent']),
+      category: 'SYSTEM',
+      reason: `Uploaded document "${name}" to customer vault`,
+      metadata: { customerId: customer._id, documentName: name, documentType: type }
+    });
+
+    res.json({ success: true, message: 'Document uploaded successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// POST /api/users — Create new team member (super admin only)
+// ══════════════════════════════════════════════
+router.post('/', requireSuperAdmin, async (req, res) => {
   try {
     const { email, password, name, phone, role } = req.body;
 

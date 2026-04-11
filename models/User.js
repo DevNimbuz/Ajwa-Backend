@@ -2,14 +2,32 @@
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * FlyAjwa — User Model (Mongoose)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * Roles: SUPER_ADMIN (full access) | TEAM (limited access)
+ * Roles: SUPER_ADMIN (full access) | TEAM (limited access) | CUSTOMER (traveler)
  * Password is bcrypt hashed before save
  * JWT token generation built-in
+ * Supports customer profiles with travel preferences
  */
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+
+const ProfileSchema = new mongoose.Schema({
+  dob: { type: Date },
+  address: { type: String, trim: true },
+  passportNo: { type: String, trim: true, uppercase: true },
+  passportExpiry: { type: Date },
+  mealPreference: { 
+    type: String, 
+    enum: ['vegetarian', 'non-vegetarian', 'vegan', 'halal', 'kosher', 'jain', 'other', ''],
+    default: '' 
+  },
+  seatPreference: { 
+    type: String, 
+    enum: ['window', 'aisle', 'middle', 'exit-row', 'any', ''],
+    default: '' 
+  },
+}, { _id: false });
 
 const UserSchema = new mongoose.Schema({
   email: {
@@ -38,13 +56,35 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['SUPER_ADMIN', 'TEAM'],
+    enum: ['SUPER_ADMIN', 'TEAM', 'CUSTOMER'],
     default: 'TEAM',
   },
   isActive: {
     type: Boolean,
     default: true,
   },
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+  verificationToken: {
+    type: String,
+    select: false,
+  },
+  profile: {
+    type: ProfileSchema,
+    default: () => ({}),
+  },
+  wishlist: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Package',
+  }],
+  documents: [{
+    name: { type: String, required: true },
+    url: { type: String, required: true },
+    type: { type: String, enum: ['ticket', 'voucher', 'visa', 'insurance', 'other'] },
+    uploadedAt: { type: Date, default: Date.now },
+  }],
   tokenVersion: {
     type: Number,
     default: 0,
@@ -102,6 +142,10 @@ UserSchema.methods.toSafeJSON = function () {
     phone: this.phone,
     role: this.role,
     isActive: this.isActive,
+    isVerified: this.isVerified,
+    profile: this.profile,
+    wishlist: this.wishlist,
+    documents: this.documents,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,
   };
