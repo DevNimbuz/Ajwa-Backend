@@ -114,6 +114,63 @@ router.post('/', [
 });
 
 // ══════════════════════════════════════════════
+// POST /api/leads/whatsapp-click — Track WhatsApp button clicks (PUBLIC)
+// ══════════════════════════════════════════════
+router.post('/whatsapp-click', async (req, res) => {
+  try {
+    const { phone, name, destination, packageSlug, page, selectedOptions } = req.body;
+
+    // Try to find existing lead by phone or create minimal tracking
+    if (phone) {
+      const cleanPhone = phone.replace(/[^0-9+]/g, '');
+      let lead = await Lead.findOne({ phone: cleanPhone });
+
+      if (lead) {
+        // Add click to existing lead
+        lead.whatsappClicks.push({
+          clickedAt: new Date(),
+          page: page || 'unknown',
+          packageSlug: packageSlug || lead.packageSlug,
+          selectedOptions: selectedOptions || {
+            days: lead.selectedDays,
+            flight: lead.selectedFlight,
+            hotelStar: lead.selectedHotelStar,
+            groupSize: lead.selectedGroupSize,
+          },
+        });
+        await lead.save();
+        return res.json({ success: true, message: 'WhatsApp click tracked' });
+      }
+    }
+
+    // Create a new lead entry for WhatsApp click tracking
+    const lead = await Lead.create({
+      name: name?.trim() || 'WhatsApp Visitor',
+      phone: phone ? phone.replace(/[^0-9+]/g, '') : 'unknown',
+      destination: destination?.trim(),
+      packageSlug: packageSlug?.trim(),
+      source: 'whatsapp',
+      status: 'NEW',
+      priority: 'LOW',
+      whatsappClicks: [{
+        clickedAt: new Date(),
+        page: page || 'unknown',
+        packageSlug: packageSlug,
+        selectedOptions: selectedOptions || {},
+      }],
+    });
+
+    // Broadcast notification for WhatsApp click
+    broadcastLead(lead);
+
+    res.json({ success: true, message: 'WhatsApp click tracked', data: { id: lead._id } });
+  } catch (error) {
+    console.error('[Leads] WhatsApp click error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to track click' });
+  }
+});
+
+// ══════════════════════════════════════════════
 // GET /api/leads — List leads with filters (ADMIN)
 // Query: ?status=NEW&source=website&search=john&page=1&limit=20&sort=-createdAt
 // ══════════════════════════════════════════════

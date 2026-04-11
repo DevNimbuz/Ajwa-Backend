@@ -16,6 +16,19 @@ const NoteSchema = new mongoose.Schema({
   at: { type: Date, default: Date.now },        // When it was added
 }, { _id: false });
 
+// ── WhatsApp Click Sub-Schema ──
+const WhatsAppClickSchema = new mongoose.Schema({
+  clickedAt: { type: Date, default: Date.now },
+  page: { type: String },       // Where they clicked from
+  packageSlug: { type: String },
+  selectedOptions: {
+    days: Number,
+    flight: Boolean,
+    hotelStar: Number,
+    groupSize: Number,
+  },
+}, { _id: false });
+
 const LeadSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -52,6 +65,8 @@ const LeadSchema = new mongoose.Schema({
     enum: ['website', 'whatsapp', 'phone', 'social', 'referral', 'other'],
     default: 'website',
   },
+  // ── WhatsApp Click Tracking ──
+  whatsappClicks: [WhatsAppClickSchema],
   // ── Status Funnel ──
   status: {
     type: String,
