@@ -81,11 +81,35 @@ router.get('/public', async (req, res) => {
 });
 
 // ══ ADMIN ROUTES ══
-// GET /api/testimonials — Admin list all
+// GET /api/testimonials — Admin list all with pagination
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const docs = await Testimonial.find().sort({ createdAt: -1 });
-    res.json({ success: true, data: docs });
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+    const status = req.query.status;
+
+    let filter = {};
+    if (status && ['PENDING', 'APPROVED', 'REJECTED'].includes(status)) {
+      filter.status = status;
+    }
+
+    const [docs, total] = await Promise.all([
+      Testimonial.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Testimonial.countDocuments(filter),
+    ]);
+
+    res.json({
+      success: true,
+      data: docs,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
+      },
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
   }

@@ -37,19 +37,38 @@ const upload = multer({
 });
 
 // ══════════════════════════════════════════════
-// GET /api/gallery — Public
+// GET /api/gallery — Public with optional pagination
 // ══════════════════════════════════════════════
 router.get('/', async (req, res) => {
   try {
     const { package: packageSlug } = req.query;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
     let filter = {};
     if (packageSlug === 'general') {
       filter = { $or: [{ packageSlug: null }, { packageSlug: '' }] };
     } else if (packageSlug) {
       filter = { packageSlug };
     }
-    const docs = await Gallery.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, data: docs });
+
+    const [docs, total] = await Promise.all([
+      Gallery.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Gallery.countDocuments(filter),
+    ]);
+
+    res.json({
+      success: true,
+      data: docs,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
+      },
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
