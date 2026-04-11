@@ -103,6 +103,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/testimonials', require('./routes/testimonials'));
 app.use('/api/gallery', require('./routes/gallery'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 
 

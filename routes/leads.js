@@ -21,6 +21,31 @@ const { leadLimiter } = require('../middleware/rateLimiter');
 const { honeypotCheck } = require('../middleware/security');
 const { sendLeadNotification } = require('../utils/email');
 
+// ── Notification broadcaster (lazy load to avoid circular) ──
+let notificationRouter;
+function broadcastLead(lead) {
+  try {
+    if (!notificationRouter) {
+      notificationRouter = require('./notifications');
+    }
+    notificationRouter.broadcast({
+      type: 'NEW_LEAD',
+      lead: {
+        id: lead._id,
+        name: lead.name,
+        phone: lead.phone,
+        destination: lead.destination,
+        source: lead.source,
+        createdAt: lead.createdAt,
+      },
+      message: `New lead: ${lead.name}${lead.destination ? ` (${lead.destination})` : ''}`,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error('[Notifications] Broadcast error:', e.message);
+  }
+}
+
 const { body, validationResult } = require('express-validator');
 
 // ══════════════════════════════════════════════
@@ -70,6 +95,9 @@ router.post('/', [
       selectedDays, selectedFlight, selectedHotelStar, selectedGroupSize, quotedPrice,
       utmSource, utmMedium, utmCampaign, referrer,
     });
+
+    // Broadcast real-time notification to admin panels
+    broadcastLead(lead);
 
     // Send email notification (async — don't block response)
     sendLeadNotification(lead).catch(err => console.error('[Lead] Email error:', err.message));
