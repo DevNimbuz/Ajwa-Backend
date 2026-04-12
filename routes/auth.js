@@ -229,7 +229,7 @@ router.post('/verify-otp', [
 
     const { verifyToken, emailOTP } = req.body;
 
-    const user = await User.findById(verifyToken).select('+emailOTP.code +emailOTP.expiresAt +emailOTP.attempts +pendingRegistration');
+    const user = await User.findById(verifyToken).select('+emailOTP.code +emailOTP.expiresAt +emailOTP.attempts +pendingRegistration +pendingRegistration.password');
 
     if (!user || !user.pendingRegistration) {
       return res.status(400).json({ success: false, message: 'Invalid or expired verification session. Please register again.' });
