@@ -4,6 +4,7 @@ const Gallery = require('../models/Gallery');
 const { requireAuth } = require('../middleware/auth');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
+const { validateFile, sanitizeFilename } = require('../middleware/uploadValidator');
 
 // ── Cloudinary config (uses env vars) ──
 cloudinary.config({
@@ -26,13 +27,24 @@ const uploadToCloudinary = (buffer, folder = 'flyajwa/gallery') => {
   });
 };
 
-// ── Multer: memory storage (no local disk) ──
+// ── Multer: memory storage with enhanced validation ──
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { 
+    fileSize: 10 * 1024 * 1024, // 10MB per file
+    files: 20, // Max 20 files per request
+  },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only images are allowed'));
+    // Sanitize filename
+    file.originalname = sanitizeFilename(file.originalname);
+    
+    // Validate using our validator
+    const result = validateFile(file, 'image');
+    if (result.valid) {
+      cb(null, true);
+    } else {
+      cb(new Error(result.error));
+    }
   },
 });
 

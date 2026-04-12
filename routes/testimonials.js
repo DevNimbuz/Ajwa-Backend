@@ -4,6 +4,7 @@ const Testimonial = require('../models/Testimonial');
 const { requireAuth } = require('../middleware/auth');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
+const { validateFile, sanitizeFilename } = require('../middleware/uploadValidator');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -13,10 +14,18 @@ cloudinary.config({
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only images are allowed'));
+    // Sanitize filename
+    file.originalname = sanitizeFilename(file.originalname);
+    
+    // Validate using our validator
+    const result = validateFile(file, 'image');
+    if (result.valid) {
+      cb(null, true);
+    } else {
+      cb(new Error(result.error));
+    }
   }
 });
 

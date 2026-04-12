@@ -38,28 +38,47 @@ connectDB();
 // ══════════════════════════════════════════════
 
 // Security headers (XSS, clickjacking, MIME sniffing protection)
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(helmet({ 
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      connectSrc: ["'self'"],
+    },
+  },
+}));
 
-// CORS — allow frontend domain
+// CORS — allow only whitelisted frontend domains
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://www.flyajwa.com',
+  'https://flyajwa.com',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
 app.use(cors({
   origin: function (origin, callback) {
-    const allowed = [
-      'http://localhost:3000',
-      'https://www.flyajwa.com',
-      'https://flyajwa.com',
-      process.env.FRONTEND_URL,
-    ].filter(Boolean);
-
-    // Allow Vercel preview deployments (*.vercel.app)
-    if (!origin || allowed.includes(origin) || origin.endsWith('.vercel.app')) {
+    // Allow requests with no origin (mobile apps, Postman, curl)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
+      callback(new Error('Not allowed by CORS policy'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+  exposedHeaders: ['X-CSRF-Token'],
 }));
 
 // Apply cookie parser
@@ -68,13 +87,13 @@ app.use(cookieParser());
 // Anti NoSQL Injection
 app.use(mongoSanitize());
 
-// Parse JSON bodies (limit 10mb for package data with images)
-app.use(express.json({ limit: '10mb' }));
+// Parse JSON bodies with strict size limits
+app.use(express.json({ limit: '1mb' }));
 
-// Parse URL-encoded bodies
-app.use(express.urlencoded({ extended: true }));
+// Parse URL-encoded bodies with strict size limits
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Global rate limiter (100 requests / 15 min per IP)
+// Global rate limiter (500 requests / 15 min per IP)
 app.use('/api/', globalLimiter);
 
 // Sanitize all request bodies (XSS prevention)
