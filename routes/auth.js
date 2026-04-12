@@ -401,7 +401,6 @@ router.post('/send-otp', [
     );
 
     await sendOTPEmail({ email, name, otp: emailOTP, type: 'email' });
-    await sendOTPSMS({ phone, name, otp: phoneOTP });
 
     console.log(`[OTP] Email OTP for ${email}: ${emailOTP}`);
 
@@ -665,14 +664,33 @@ router.delete('/logs', requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════
 router.get('/wishlist', requireAuth, async (req, res) => {
   try {
-    if (req.user.role !== 'CUSTOMER') {
-      return res.status(403).json({ success: false, message: 'Access denied' });
-    }
+    const user = await User.findById(req.user._id);
+    const Package = require('../models/Package');
+    
+    const packages = await Package.find({ _id: { $in: user.wishlist } })
+      .select('_id slug name heroImg variants tagline');
+    
+    const result = packages.map(pkg => {
+      const activeVariants = pkg.variants?.filter(v => v.isActive) || [];
+      const lowestPrice = activeVariants.length > 0
+        ? Math.min(...activeVariants.map(v => v.basePrice))
+        : 0;
+      const defaultVariant = activeVariants[0];
+      
+      return {
+        _id: pkg._id,
+        slug: pkg.slug,
+        name: pkg.name,
+        heroImg: pkg.heroImg,
+        tagline: pkg.tagline,
+        startingPrice: lowestPrice,
+        duration: defaultVariant
+          ? `${defaultVariant.durationDays}D/${defaultVariant.durationNights}N`
+          : 'Customizable'
+      };
+    });
 
-    const user = await User.findById(req.user._id)
-      .populate('wishlist', 'slug name title heroImg startingPrice defaultDuration');
-
-    res.json({ success: true, data: user.wishlist });
+    res.json({ success: true, data: result });
   } catch (error) {
     console.error('[Auth] Wishlist error:', error.message);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -684,37 +702,34 @@ router.get('/wishlist', requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════
 router.post('/wishlist/:packageId', requireAuth, async (req, res) => {
   try {
-    if (req.user.role !== 'CUSTOMER') {
-      return res.status(403).json({ success: false, message: 'Access denied' });
-    }
-
     const Package = require('../models/Package');
-    const pkg = await Package.findById(req.params.packageId);
+    const { packageId } = req.params;
+    
+    console.log('[Wishlist] Add request:', { packageId });
+    
+    let pkg;
+    if (packageId.match(/^[0-9a-fA-F]{24}$/)) {
+      pkg = await Package.findById(packageId);
+    } else {
+      pkg = await Package.findOne({ slug: packageId });
+    }
+    
+    console.log('[Wishlist] Package found:', pkg ? pkg.slug : null);
+    
     if (!pkg) {
       return res.status(404).json({ success: false, message: 'Package not found' });
     }
 
     const user = await User.findById(req.user._id);
-    if (!user.wishlist.includes(req.params.packageId)) {
-      user.wishlist.push(req.params.packageId);
+    const pkgId = pkg._id.toString();
+    if (!user.wishlist.map(id => id.toString()).includes(pkgId)) {
+      user.wishlist.push(pkgId);
       await user.save();
-
-      await AuditLog.create({
-        action: 'WISHLIST_ADD',
-        user: user._id,
-        email: user.email,
-        ip: getClientIP(req),
-        userAgent: req.headers['user-agent'] || 'unknown',
-        device: detectDevice(req.headers['user-agent']),
-        category: 'SUCCESS',
-        reason: `Added "${pkg.name}" to wishlist`,
-        metadata: { packageId: pkg._id, packageName: pkg.name }
-      });
     }
 
     res.json({ success: true, message: 'Added to wishlist' });
   } catch (error) {
-    console.error('[Auth] Wishlist add error:', error.message);
+    console.error('[Auth] Wishlist add error:', error.message, error.stack);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -724,14 +739,9 @@ router.post('/wishlist/:packageId', requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════
 router.delete('/wishlist/:packageId', requireAuth, async (req, res) => {
   try {
-    if (req.user.role !== 'CUSTOMER') {
-      return res.status(403).json({ success: false, message: 'Access denied' });
-    }
-
     const user = await User.findById(req.user._id);
-    user.wishlist = user.wishlist.filter(
-      id => id.toString() !== req.params.packageId
-    );
+    const { packageId } = req.params;
+    user.wishlist = user.wishlist.filter(id => id.toString() !== packageId);
     await user.save();
 
     res.json({ success: true, message: 'Removed from wishlist' });

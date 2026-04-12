@@ -25,7 +25,7 @@ const { cacheMiddleware, clearCache } = require('../utils/cache');
 router.get('/', cacheMiddleware(1800), async (req, res) => {
   try {
     const packages = await Package.find({ isActive: true })
-      .select('slug name title tagline heroImg sortOrder variants')
+      .select('_id slug name title tagline heroImg sortOrder variants')
       .sort({ sortOrder: 1 });
 
     // Transform for frontend — include starting price and default duration
@@ -37,6 +37,7 @@ router.get('/', cacheMiddleware(1800), async (req, res) => {
       const defaultVariant = activeVariants[0];
 
       return {
+        _id: pkg._id.toString(),
         slug: pkg.slug,
         name: pkg.name,
         title: pkg.title,
