@@ -89,4 +89,79 @@ async function sendLeadNotification(lead) {
   }
 }
 
-module.exports = { sendLeadNotification };
+/**
+ * Sends OTP verification email
+ * @param {Object} data - { email, name, otp, type }
+ */
+async function sendOTPEmail({ email, name, otp, type }) {
+  const transport = getTransporter();
+  
+  const html = `
+    <div style="font-family:'Segoe UI',sans-serif;max-width:500px;margin:0 auto;padding:20px;">
+      <div style="background:linear-gradient(135deg,#1e2a4a,#2a3f5f);color:#fff;padding:32px;border-radius:16px 16px 0 0;text-align:center;">
+        <div style="width:60px;height:60px;margin:0 auto 16px;background:rgba(99,171,69,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;">
+          ✈️
+        </div>
+        <h2 style="margin:0;font-size:22px;">Verify Your Email</h2>
+        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">Welcome to FlyAjwa, ${name}!</p>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;padding:32px;border-radius:0 0 16px 16px;text-align:center;">
+        <p style="color:#334155;font-size:15px;margin:0 0 24px;">Enter this code to verify your email address:</p>
+        <div style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-radius:12px;padding:20px;margin-bottom:24px;">
+          <span style="font-family:'SF Mono',Monaco,'Courier New',monospace;font-size:36px;font-weight:800;color:#1e293b;letter-spacing:8px;">${otp}</span>
+        </div>
+        <p style="color:#94a3b8;font-size:12px;margin:0;">This code expires in <strong>10 minutes</strong>. Do not share it with anyone.</p>
+      </div>
+    </div>`;
+
+  if (!transport) {
+    console.log(`[Email] OTP for ${email} (${type}): ${otp}`);
+    return { success: true, method: 'console' };
+  }
+
+  try {
+    await transport.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: email,
+      subject: `🔐 FlyAjwa Email Verification Code: ${otp}`,
+      html,
+    });
+    console.log(`[Email] OTP sent to ${email}`);
+    return { success: true, method: 'email' };
+  } catch (error) {
+    console.error('[Email] OTP failed:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Sends OTP via SMS using Twilio
+ * @param {Object} data - { phone, name, otp }
+ */
+async function sendOTPSMS({ phone, name, otp }) {
+  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER } = process.env;
+
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
+    console.log(`[SMS] OTP for ${phone}: ${otp}`);
+    return { success: true, method: 'console' };
+  }
+
+  try {
+    const twilio = require('twilio');
+    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+    const message = await client.messages.create({
+      body: `FlyAjwa: Your verification code is ${otp}. Valid for 10 minutes. Do not share this code with anyone.`,
+      from: TWILIO_PHONE_NUMBER,
+      to: phone,
+    });
+
+    console.log(`[SMS] OTP sent to ${phone}, SID: ${message.sid}`);
+    return { success: true, method: 'sms', sid: message.sid };
+  } catch (error) {
+    console.error('[SMS] OTP failed:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+module.exports = { sendLeadNotification, sendOTPEmail, sendOTPSMS };

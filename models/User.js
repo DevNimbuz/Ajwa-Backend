@@ -67,9 +67,27 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  isEmailVerified: {
+    type: Boolean,
+    default: false,
+  },
   verificationToken: {
     type: String,
     select: false,
+  },
+  // ── OTP Verification Fields ──
+  emailOTP: {
+    code: { type: String, select: false },
+    expiresAt: { type: Date, select: false },
+    attempts: { type: Number, default: 0 },
+  },
+  // ── Pending Registration (for OTP verification) ──
+  pendingRegistration: {
+    name: { type: String },
+    phone: { type: String },
+    email: { type: String },
+    password: { type: String, select: false },
+    expiresAt: { type: Date, select: false },
   },
   profile: {
     type: ProfileSchema,
@@ -143,6 +161,7 @@ UserSchema.methods.toSafeJSON = function () {
     role: this.role,
     isActive: this.isActive,
     isVerified: this.isVerified,
+    isEmailVerified: this.isEmailVerified,
     profile: this.profile,
     wishlist: this.wishlist,
     documents: this.documents,
