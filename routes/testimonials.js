@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Testimonial = require('../models/Testimonial');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAnyAdmin } = require('../middleware/auth');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { validateFile, sanitizeFilename } = require('../middleware/uploadValidator');
@@ -91,7 +91,7 @@ router.get('/public', async (req, res) => {
 
 // ══ ADMIN ROUTES ══
 // GET /api/testimonials — Admin list all with pagination
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
@@ -125,7 +125,7 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // PUT /api/testimonials/:id — Approve/Reject/Update
-router.put('/:id', requireAuth, async (req, res) => {
+router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const { status, name, text, rating, avatarUrl } = req.body;
     const doc = await Testimonial.findByIdAndUpdate(
@@ -141,7 +141,7 @@ router.put('/:id', requireAuth, async (req, res) => {
 });
 
 // DELETE /api/testimonials/:id
-router.delete('/:id', requireAuth, async (req, res) => {
+router.delete('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const doc = await Testimonial.findById(req.params.id);
     if (!doc) return res.status(404).json({ success: false, message: 'Not found' });
@@ -157,7 +157,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/testimonials/sync-google — Admin exclusively fetches place reviews
-router.post('/sync-google', requireAuth, async (req, res) => {
+router.post('/sync-google', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const { placeId } = req.body;
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;

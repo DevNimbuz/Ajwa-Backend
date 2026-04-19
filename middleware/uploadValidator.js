@@ -10,7 +10,6 @@ const ALLOWED_IMAGE_TYPES = {
   'image/png': { ext: '.png' },
   'image/gif': { ext: '.gif' },
   'image/webp': { ext: '.webp' },
-  'image/svg+xml': { ext: '.svg' },
 };
 
 const ALLOWED_DOCUMENT_TYPES = {
@@ -57,25 +56,14 @@ function validateFile(file, type = 'image') {
   
   // Additional check: verify file extension matches MIME type
   const ext = file.originalname.toLowerCase().substring(file.originalname.lastIndexOf('.'));
-  const allowedExts = Object.values(allowedTypes[file.mimetype]);
-  const hasValidExt = allowedExts.some(e => e.ext === ext || e.ext2 === ext);
+  const allowedExts = Object.values(allowedTypes[file.mimetype]).filter(Boolean);
+  const hasValidExt = allowedExts.includes(ext);
   
   if (!hasValidExt) {
     return { 
       valid: false, 
-      error: `File extension mismatch. Expected: ${allowedExts.map(e => e.ext).join(', ')}` 
+      error: `File extension mismatch. Expected: ${allowedExts.join(', ')}` 
     };
-  }
-  
-  // Check for SVG XSS vectors (SVG files can contain scripts)
-  if (file.mimetype === 'image/svg+xml') {
-    const svgContent = file.buffer?.toString('utf8') || '';
-    if (/<script/i.test(svgContent) || /on\w+=/i.test(svgContent)) {
-      return { 
-        valid: false, 
-        error: 'SVG files with scripts are not allowed' 
-      };
-    }
   }
   
   return { valid: true };

@@ -21,6 +21,9 @@ const { getClientIP, detectDevice } = require('../middleware/security');
 // All routes require authentication
 router.use(requireAuth);
 
+const TEAM_ROLES = ['SUPER_ADMIN', 'TEAM'];
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
 // ══════════════════════════════════════════════
 // GET /api/users — List all team members
 // ══════════════════════════════════════════════
@@ -147,6 +150,10 @@ router.post('/', requireSuperAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
     }
 
+    if (role && !TEAM_ROLES.includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid team role' });
+    }
+
     // Check if email exists
     const existing = await User.findOne({ email: email.toLowerCase().trim() });
     if (existing) {
@@ -184,31 +191,56 @@ router.post('/', requireSuperAdmin, async (req, res) => {
 // ══════════════════════════════════════════════
 // PUT /api/users/:id — Update team member
 // ══════════════════════════════════════════════
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireSuperAdmin, async (req, res) => {
   try {
     const { name, phone, role, isActive, password } = req.body;
-    const update = {};
-
-    if (name) update.name = name.trim();
-    if (phone !== undefined) update.phone = phone?.trim();
-    if (role) update.role = role;
-    if (isActive !== undefined) update.isActive = isActive;
-
-    // If password is being reset
-    if (password) {
-      if (password.length < 8) {
-        return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
-      }
-      // Hash password manually since findByIdAndUpdate skips pre-save hooks
-      const bcrypt = require('bcryptjs');
-      update.password = await bcrypt.hash(password, 12);
-    }
-
-    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true }).select('-password');
+    const user = await User.findById(req.params.id);
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
+
+    if (!TEAM_ROLES.includes(user.role)) {
+      return res.status(404).json({ success: false, message: 'Team member not found' });
+    }
+
+    if (role && !TEAM_ROLES.includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid team role' });
+    }
+
+    if (req.params.id === req.user._id.toString() && isActive === false) {
+      return res.status(400).json({ success: false, message: 'You cannot deactivate your own account' });
+    }
+
+    const removingActiveSuperAdmin =
+      user.role === 'SUPER_ADMIN' &&
+      user.isActive &&
+      ((role && role !== 'SUPER_ADMIN') || isActive === false);
+
+    if (removingActiveSuperAdmin) {
+      const activeSuperAdmins = await User.countDocuments({ role: 'SUPER_ADMIN', isActive: true });
+      if (activeSuperAdmins <= 1) {
+        return res.status(400).json({ success: false, message: 'At least one active super admin account must remain' });
+      }
+    }
+
+    if (name) user.name = name.trim();
+    if (phone !== undefined) user.phone = phone?.trim();
+    if (role) user.role = role;
+    if (isActive !== undefined) user.isActive = isActive;
+
+    if (password) {
+      if (!STRONG_PASSWORD_REGEX.test(password)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character',
+        });
+      }
+      user.password = password;
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
+    }
+
+    await user.save();
 
     await AuditLog.create({
       action: 'USER_MUTATION',
@@ -222,7 +254,7 @@ router.put('/:id', async (req, res) => {
       metadata: { targetUserId: user._id, updates: { role, isActive, password: !!password } }
     });
 
-    res.json({ success: true, data: user });
+    res.json({ success: true, data: user.toSafeJSON() });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -231,17 +263,30 @@ router.put('/:id', async (req, res) => {
 // ══════════════════════════════════════════════
 // DELETE /api/users/:id — Delete team member
 // ══════════════════════════════════════════════
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireSuperAdmin, async (req, res) => {
   try {
     // Prevent deleting yourself
     if (req.params.id === req.user._id.toString()) {
       return res.status(400).json({ success: false, message: 'You cannot delete your own account' });
     }
 
-    const user = await User.findByIdAndDelete(req.params.id);
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
+
+    if (!TEAM_ROLES.includes(user.role)) {
+      return res.status(404).json({ success: false, message: 'Team member not found' });
+    }
+
+    if (user.role === 'SUPER_ADMIN' && user.isActive) {
+      const activeSuperAdmins = await User.countDocuments({ role: 'SUPER_ADMIN', isActive: true });
+      if (activeSuperAdmins <= 1) {
+        return res.status(400).json({ success: false, message: 'You cannot delete the last active super admin account' });
+      }
+    }
+
+    await user.deleteOne();
 
     await AuditLog.create({
       action: 'USER_MUTATION',

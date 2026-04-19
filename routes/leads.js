@@ -16,7 +16,8 @@ const Lead = require('../models/Lead');
 const Package = require('../models/Package');
 const AuditLog = require('../models/AuditLog');
 const User = require('../models/User');
-const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
+const jwt = require('jsonwebtoken');
+const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../middleware/auth');
 const { getClientIP, detectDevice } = require('../middleware/security');
 const { leadLimiter } = require('../middleware/rateLimiter');
 const { honeypotCheck } = require('../middleware/security');
@@ -48,6 +49,41 @@ function broadcastLead(lead) {
 }
 
 const { body, validationResult } = require('express-validator');
+
+function buildLeadAccessFilter(user) {
+  if (!user || user.role !== 'TEAM') {
+    return {};
+  }
+
+  return {
+    $or: [
+      { assignedTo: user._id },
+      { assignedTo: null },
+    ],
+  };
+}
+
+function mergeFilters(...filters) {
+  const activeFilters = filters.filter(filter => filter && Object.keys(filter).length > 0);
+
+  if (activeFilters.length === 0) {
+    return {};
+  }
+
+  if (activeFilters.length === 1) {
+    return activeFilters[0];
+  }
+
+  return { $and: activeFilters };
+}
+
+function prependMatch(filter, pipeline) {
+  if (!filter || Object.keys(filter).length === 0) {
+    return pipeline;
+  }
+
+  return [{ $match: filter }, ...pipeline];
+}
 
 // ══════════════════════════════════════════════
 // POST /api/leads — Submit new lead (PUBLIC — rate limited + honeypot)
@@ -86,9 +122,11 @@ router.post('/', [
     let customerId = null;
     try {
       const authHeader = req.headers.authorization;
-      if (authHeader?.startsWith('Bearer ')) {
-        const jwt = require('jsonwebtoken');
-        const token = authHeader.split(' ')[1];
+      const token = authHeader?.startsWith('Bearer ')
+        ? authHeader.split(' ')[1]
+        : req.cookies?.token;
+
+      if (token) {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const user = await User.findById(decoded.id);
         if (user && user.role === 'CUSTOMER') {
@@ -198,7 +236,7 @@ router.post('/whatsapp-click', async (req, res) => {
 // GET /api/leads — List leads with filters (ADMIN)
 // Query: ?status=NEW&source=website&search=john&page=1&limit=20&sort=-createdAt
 // ══════════════════════════════════════════════
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const { status, source, priority, search, assignedTo,
       startDate, endDate, page = 1, limit = 20, sort = '-createdAt' } = req.query;
@@ -228,13 +266,7 @@ router.get('/', requireAuth, async (req, res) => {
       ];
     }
 
-    // Team members can only see their assigned leads
-    if (req.user.role === 'TEAM') {
-      filter.$or = [
-        { assignedTo: req.user._id },
-        { assignedTo: null }, // Unassigned leads are visible to all
-      ];
-    }
+    const scopedFilter = mergeFilters(filter, buildLeadAccessFilter(req.user));
 
     // Pagination
     const pageNum = Math.max(1, parseInt(page));
@@ -243,12 +275,12 @@ router.get('/', requireAuth, async (req, res) => {
 
     // Execute query
     const [leads, total] = await Promise.all([
-      Lead.find(filter)
+      Lead.find(scopedFilter)
         .populate('assignedTo', 'name email')
         .sort(sort)
         .skip(skip)
         .limit(limitNum),
-      Lead.countDocuments(filter),
+      Lead.countDocuments(scopedFilter),
     ]);
 
     res.json({
@@ -270,12 +302,13 @@ router.get('/', requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════
 // GET /api/leads/analytics — Lead statistics (ADMIN)
 // ══════════════════════════════════════════════
-router.get('/analytics', requireAuth, async (req, res) => {
+router.get('/analytics', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const thisWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const accessFilter = buildLeadAccessFilter(req.user);
 
     const [
       totalLeads,
@@ -287,19 +320,18 @@ router.get('/analytics', requireAuth, async (req, res) => {
       destinationCounts,
       recentLeads,
     ] = await Promise.all([
-      Lead.countDocuments(),
-      Lead.countDocuments({ createdAt: { $gte: today } }),
-      Lead.countDocuments({ createdAt: { $gte: thisWeek } }),
-      Lead.countDocuments({ createdAt: { $gte: thisMonth } }),
-      Lead.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
-      Lead.aggregate([{ $group: { _id: '$source', count: { $sum: 1 } } }]),
-      Lead.aggregate([
-        { $match: { destination: { $ne: null, $ne: '' } } },
+      Lead.countDocuments(accessFilter),
+      Lead.countDocuments(mergeFilters(accessFilter, { createdAt: { $gte: today } })),
+      Lead.countDocuments(mergeFilters(accessFilter, { createdAt: { $gte: thisWeek } })),
+      Lead.countDocuments(mergeFilters(accessFilter, { createdAt: { $gte: thisMonth } })),
+      Lead.aggregate(prependMatch(accessFilter, [{ $group: { _id: '$status', count: { $sum: 1 } } }])),
+      Lead.aggregate(prependMatch(accessFilter, [{ $group: { _id: '$source', count: { $sum: 1 } } }])),
+      Lead.aggregate(prependMatch(mergeFilters(accessFilter, { destination: { $nin: [null, ''] } }), [
         { $group: { _id: '$destination', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
         { $limit: 10 },
-      ]),
-      Lead.find().sort({ createdAt: -1 }).limit(5).populate('assignedTo', 'name'),
+      ])),
+      Lead.find(accessFilter).sort({ createdAt: -1 }).limit(5).populate('assignedTo', 'name'),
     ]);
 
     // Convert aggregation results to objects
@@ -327,7 +359,7 @@ router.get('/analytics', requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════
 // GET /api/leads/export — Export leads as CSV (ADMIN)
 // ══════════════════════════════════════════════
-router.get('/export', requireAuth, async (req, res) => {
+router.get('/export', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const { status, startDate, endDate } = req.query;
     const filter = {};
@@ -338,7 +370,8 @@ router.get('/export', requireAuth, async (req, res) => {
       if (endDate) filter.createdAt.$lte = new Date(endDate + 'T23:59:59.999Z');
     }
 
-    const leads = await Lead.find(filter).sort({ createdAt: -1 }).populate('assignedTo', 'name');
+    const scopedFilter = mergeFilters(filter, buildLeadAccessFilter(req.user));
+    const leads = await Lead.find(scopedFilter).sort({ createdAt: -1 }).populate('assignedTo', 'name');
 
     // Build CSV
     const headers = 'Name,Email,Phone,Destination,Source,Status,Priority,Assigned To,Message,Created At\n';
@@ -369,32 +402,36 @@ router.get('/export', requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════
 // PUT /api/leads/:id — Update lead (ADMIN)
 // ══════════════════════════════════════════════
-router.put('/:id', requireAuth, async (req, res) => {
+router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const { status, priority, assignedTo, note } = req.body;
-    const update = {};
-
-    if (status) update.status = status;
-    if (priority) update.priority = priority;
-    if (assignedTo !== undefined) update.assignedTo = assignedTo || null;
-
-    // Add note if provided
-    if (note) {
-      update.$push = {
-        notes: {
-          by: req.user.name,
-          text: note,
-          at: new Date(),
-        },
-      };
+    if (req.user.role === 'TEAM' && assignedTo !== undefined) {
+      return res.status(403).json({ success: false, message: 'Only super admins can reassign leads' });
     }
 
-    const lead = await Lead.findByIdAndUpdate(req.params.id, update, { new: true })
-      .populate('assignedTo', 'name email');
+    const lead = await Lead.findOne(mergeFilters(
+      { _id: req.params.id },
+      buildLeadAccessFilter(req.user)
+    ));
 
     if (!lead) {
       return res.status(404).json({ success: false, message: 'Lead not found' });
     }
+
+    if (status) lead.status = status;
+    if (priority) lead.priority = priority;
+    if (assignedTo !== undefined) lead.assignedTo = assignedTo || null;
+
+    if (note) {
+      lead.notes.push({
+        by: req.user.name,
+        text: note,
+        at: new Date(),
+      });
+    }
+
+    await lead.save();
+    await lead.populate('assignedTo', 'name email');
 
     await AuditLog.create({
       action: 'USER_MUTATION',

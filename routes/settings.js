@@ -34,7 +34,7 @@ router.get('/public', async (req, res) => {
 // ══════════════════════════════════════════════
 // GET /api/settings — Get all settings (ADMIN)
 // ══════════════════════════════════════════════
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const settings = await Setting.find();
     const result = {};

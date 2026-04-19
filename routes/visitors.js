@@ -9,7 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const Visitor = require('../models/Visitor');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAnyAdmin } = require('../middleware/auth');
 const { visitorLimiter } = require('../middleware/rateLimiter');
 const { hashIP, getClientIP, detectDevice } = require('../middleware/security');
 
@@ -50,7 +50,7 @@ router.post('/', visitorLimiter, async (req, res) => {
 // GET /api/visitors/analytics — Visitor statistics (ADMIN)
 // Query: ?days=30
 // ══════════════════════════════════════════════
-router.get('/analytics', requireAuth, async (req, res) => {
+router.get('/analytics', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);

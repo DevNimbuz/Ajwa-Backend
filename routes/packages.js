@@ -15,7 +15,7 @@ const express = require('express');
 const router = express.Router();
 const Package = require('../models/Package');
 const AuditLog = require('../models/AuditLog');
-const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
+const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../middleware/auth');
 const { getClientIP, detectDevice } = require('../middleware/security');
 const { cacheMiddleware, clearCache } = require('../utils/cache');
 
@@ -61,7 +61,7 @@ router.get('/', cacheMiddleware(1800), async (req, res) => {
 // ══════════════════════════════════════════════
 // GET /api/packages/all — List ALL packages (ADMIN)
 // ══════════════════════════════════════════════
-router.get('/all', requireAuth, async (req, res) => {
+router.get('/all', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const packages = await Package.find().sort({ sortOrder: 1 });
     res.json({ success: true, count: packages.length, data: packages });

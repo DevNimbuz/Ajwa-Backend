@@ -7,7 +7,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAnyAdmin } = require('../middleware/auth');
 
 // ── Connected SSE clients ──
 const clients = new Set();
@@ -30,7 +30,7 @@ module.exports.broadcast = broadcast;
 // ══════════════════════════════════════════════
 // GET /api/notifications/stream — SSE endpoint (ADMIN)
 // ══════════════════════════════════════════════
-router.get('/stream', requireAuth, (req, res) => {
+router.get('/stream', requireAuth, requireAnyAdmin, (req, res) => {
   // Set headers for SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -63,7 +63,7 @@ router.get('/stream', requireAuth, (req, res) => {
 // ══════════════════════════════════════════════
 // GET /api/notifications — Get recent notifications (ADMIN)
 // ══════════════════════════════════════════════
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, requireAnyAdmin, async (req, res) => {
   // Return empty array — notifications are real-time via SSE
   // This endpoint exists for future pagination/history if needed
   res.json({ success: true, data: [], message: 'Use SSE stream for real-time notifications' });

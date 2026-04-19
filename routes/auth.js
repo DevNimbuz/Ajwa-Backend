@@ -14,7 +14,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
 const { loginLimiter } = require('../middleware/rateLimiter');
 const { getClientIP, detectDevice } = require('../middleware/security');
 const { sendOTPEmail } = require('../utils/email');
@@ -29,6 +29,15 @@ const setTokenCookie = (res, token) => {
     secure: isProd,                      // HTTPS only in production
     sameSite: isProd ? 'None' : 'Lax',  // None = cross-domain (Vercel → Render)
     // No 'expires' or 'Max-Age' -> Session Cookie (clears on browser close)
+  });
+};
+
+const clearTokenCookie = (res) => {
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'None' : 'Lax',
   });
 };
 
@@ -137,7 +146,6 @@ router.post('/login', [
 
     res.json({
       success: true,
-      token,
       user: user.toSafeJSON(),
     });
   } catch (error) {
@@ -285,7 +293,6 @@ router.post('/verify-otp', [
     res.status(201).json({
       success: true,
       message: 'Account created successfully',
-      token,
       user: user.toSafeJSON(),
     });
   } catch (error) {
@@ -513,7 +520,6 @@ router.post('/verify-otp', [
       res.status(201).json({
         success: true,
         message: 'Account created successfully',
-        token,
         user: user.toSafeJSON(),
       });
     } else {
@@ -604,20 +610,15 @@ router.post('/resend-otp', [
 // POST /api/auth/logout — Clear cookie
 // ══════════════════════════════════════════════
 router.post('/logout', (req, res) => {
-  res.clearCookie('token');
+  clearTokenCookie(res);
   res.json({ success: true, message: 'Logged out' });
 });
 
 // ══════════════════════════════════════════════
 // GET /api/auth/logs — Admin Security Logs
 // ══════════════════════════════════════════════
-router.get('/logs', requireAuth, async (req, res) => {
+router.get('/logs', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
-    // Only allow admins to see logs
-    if (req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
-    }
-
     const logs = await AuditLog.find()
       .sort({ createdAt: -1 })
       .limit(500);
@@ -632,12 +633,8 @@ router.get('/logs', requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════
 // DELETE /api/auth/logs — Clear all audit logs
 // ══════════════════════════════════════════════
-router.delete('/logs', requireAuth, async (req, res) => {
+router.delete('/logs', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
-    if (req.user.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({ success: false, message: 'Only super admins can clear logs' });
-    }
-
     await AuditLog.deleteMany({});
     
     // Log the clear action itself so there's an audit trail of the deletion
@@ -830,12 +827,8 @@ router.get('/trips', requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════
 // POST /api/auth/unlock — Manually unlock a user
 // ══════════════════════════════════════════════
-router.post('/unlock', requireAuth, async (req, res) => {
+router.post('/unlock', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
-    if (req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
-    }
-
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false, message: 'User email is required' });
 
@@ -921,7 +914,7 @@ router.put('/password', requireAuth, async (req, res) => {
     const token = user.generateToken();
     setTokenCookie(res, token);
 
-    res.json({ success: true, message: 'Password updated successfully and all other sessions revoked', token });
+    res.json({ success: true, message: 'Password updated successfully and all other sessions revoked' });
   } catch (error) {
     console.error('[Auth] Password change error:', error.message);
     res.status(500).json({ success: false, message: 'Server error' });
