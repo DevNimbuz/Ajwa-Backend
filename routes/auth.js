@@ -243,10 +243,14 @@ router.post('/verify-otp', [
 
     const { verifyToken, emailOTP, phoneOTP } = req.body;
 
-    const user = await User.findById(verifyToken).select('+emailOTP.code +emailOTP.expiresAt +emailOTP.attempts +phoneOTP.code +phoneOTP.expiresAt +phoneOTP.attempts +pendingRegistration');
+    if (!verifyToken) {
+      return res.status(400).json({ success: false, message: 'Invalid request: No session token.' });
+    }
+
+    const user = await User.findById(verifyToken).select('+emailOTP +phoneOTP +pendingRegistration');
 
     if (!user || !user.pendingRegistration) {
-      return res.status(400).json({ success: false, message: 'Invalid registration session' });
+      return res.status(400).json({ success: false, message: 'Registration session not found or already completed.' });
     }
 
     if (new Date() > user.pendingRegistration.expiresAt) {
@@ -256,31 +260,34 @@ router.post('/verify-otp', [
     let emailVerified = user.isEmailVerified;
     let phoneVerified = user.isPhoneVerified;
 
-    // Defensive checks for OTP objects
+    // 4. Verify Email OTP if provided
     if (emailOTP && !emailVerified) {
-      if (!user.emailOTP) {
-        return res.status(400).json({ success: false, message: 'OTP session expired. Please resend code.' });
+      if (!user.emailOTP || !user.emailOTP.code) {
+        return res.status(400).json({ success: false, message: 'Email code session missing. Click Resend.' });
       }
-      if (user.emailOTP.attempts >= 5) return res.status(429).json({ success: false, message: 'Too many attempts' });
+      
+      if (user.emailOTP.attempts >= 10) return res.status(429).json({ success: false, message: 'Too many email attempts' });
+      
       if (user.emailOTP.code !== emailOTP) {
         user.emailOTP.attempts += 1;
         await user.save();
-        return res.status(400).json({ success: false, message: 'Invalid Email OTP' });
+        return res.status(400).json({ success: false, message: 'The email code you entered is incorrect.' });
       }
       emailVerified = true;
     }
 
+    // 5. Verify Phone OTP (if provided and needed)
     if (phoneOTP && !phoneVerified) {
-      if (!user.phoneOTP) {
-        return res.status(400).json({ success: false, message: 'OTP session expired. Please resend code.' });
+      if (user.phoneOTP && user.phoneOTP.code) {
+        if (user.phoneOTP.attempts >= 10) return res.status(429).json({ success: false, message: 'Too many phone attempts' });
+        
+        if (user.phoneOTP.code !== phoneOTP) {
+          user.phoneOTP.attempts += 1;
+          await user.save();
+          return res.status(400).json({ success: false, message: 'The phone code you entered is incorrect.' });
+        }
+        phoneVerified = true;
       }
-      if (user.phoneOTP.attempts >= 5) return res.status(429).json({ success: false, message: 'Too many attempts' });
-      if (user.phoneOTP.code !== phoneOTP) {
-        user.phoneOTP.attempts += 1;
-        await user.save();
-        return res.status(400).json({ success: false, message: 'Invalid Phone OTP' });
-      }
-      phoneVerified = true;
     }
 
     user.isEmailVerified = emailVerified;

@@ -86,6 +86,11 @@ const UserSchema = new mongoose.Schema({
     expiresAt: { type: Date, select: false },
     attempts: { type: Number, default: 0 },
   },
+  phoneOTP: {
+    code: { type: String, select: false },
+    expiresAt: { type: Date, select: false },
+    attempts: { type: Number, default: 0 },
+  },
   // ── Pending Registration (for OTP verification) ──
   pendingRegistration: {
     name: { type: String },
