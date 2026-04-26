@@ -117,6 +117,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/packages', require('./routes/packages'));
 app.use('/api/leads', require('./routes/leads'));
+app.use('/api/external-leads', require('./routes/externalLeads'));
 app.use('/api/visitors', require('./routes/visitors'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/settings', require('./routes/settings'));

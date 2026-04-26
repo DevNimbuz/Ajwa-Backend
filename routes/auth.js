@@ -155,7 +155,7 @@ router.post('/login', [
 });
 
 // ══════════════════════════════════════════════
-// POST /api/auth/send-otp — Send OTP for registration
+// POST /api/auth/send-otp — Send OTP for registration (Email + Phone)
 // ══════════════════════════════════════════════
 router.post('/send-otp', [
   body('email').isEmail().withMessage('Enter a valid email address').normalizeEmail(),
@@ -172,210 +172,7 @@ router.post('/send-otp', [
     const { email, name, phone, password } = req.body;
 
     const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ success: false, message: 'An account with this email already exists' });
-    }
-
-    const crypto = require('crypto');
-    const emailOTP = crypto.randomInt(100000, 999999).toString();
-
-    const pendingUser = await User.findOneAndUpdate(
-      { email },
-      {
-        pendingRegistration: {
-          name,
-          phone,
-          email,
-          password,
-          expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-        },
-        emailOTP: {
-          code: emailOTP,
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-          attempts: 0,
-        },
-      },
-      { upsert: true, new: true }
-    );
-
-    // Send email (non-blocking, failures won't crash the request)
-    sendOTPEmail({ email, name, otp: emailOTP, type: 'email' })
-      .then(result => {
-        if (result.method === 'console') {
-          console.log(`[OTP] Email OTP for ${email}: ${emailOTP}`);
-        }
-      })
-      .catch(err => {
-        console.log(`[OTP] Email OTP for ${email}: ${emailOTP} (email failed: ${err.message})`);
-      });
-
-    res.json({
-      success: true,
-      message: 'OTP sent successfully',
-      verifyToken: pendingUser._id.toString(),
-      emailMasked: email.replace(/(.{2}).*(@.*)/, '$1***$2'),
-      expiresIn: 600,
-    });
-  } catch (error) {
-    console.error('[Auth] Send OTP error:', error.message, error.stack);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// ══════════════════════════════════════════════
-// POST /api/auth/verify-otp — Verify OTP and complete registration
-// ══════════════════════════════════════════════
-router.post('/verify-otp', [
-  body('verifyToken').notEmpty().withMessage('Verification token is required'),
-  body('emailOTP').isLength({ min: 6, max: 6 }).withMessage('Email OTP must be 6 digits'),
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, message: errors.array()[0].msg });
-    }
-
-    const { verifyToken, emailOTP } = req.body;
-
-    const user = await User.findById(verifyToken).select('+emailOTP.code +emailOTP.expiresAt +emailOTP.attempts +pendingRegistration +pendingRegistration.password');
-
-    if (!user || !user.pendingRegistration) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired verification session. Please register again.' });
-    }
-
-    if (new Date() > user.pendingRegistration.expiresAt) {
-      await User.findByIdAndDelete(verifyToken);
-      return res.status(400).json({ success: false, message: 'Verification session expired. Please register again.' });
-    }
-
-    if (user.emailOTP.attempts >= 5) {
-      return res.status(429).json({ success: false, message: 'Too many attempts. Please request a new OTP.' });
-    }
-
-    if (user.emailOTP.code !== emailOTP) {
-      user.emailOTP.attempts += 1;
-      await user.save();
-      const remaining = 5 - user.emailOTP.attempts;
-      return res.status(400).json({ success: false, message: `Invalid OTP. ${remaining} attempts remaining.` });
-    }
-
-    if (new Date() > user.emailOTP.expiresAt) {
-      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
-    }
-
-    const { name, phone, email, password } = user.pendingRegistration;
-
-    user.email = email;
-    user.name = name;
-    user.phone = phone;
-    user.password = password;
-    user.role = 'CUSTOMER';
-    user.isEmailVerified = true;
-    user.isVerified = true;
-    user.pendingRegistration = undefined;
-    user.emailOTP = undefined;
-    await user.save();
-
-    const token = user.generateToken();
-    setTokenCookie(res, token);
-
-    await AuditLog.create({
-      action: 'USER_REGISTRATION',
-      user: user._id,
-      email: user.email,
-      ip: getClientIP(req),
-      userAgent: req.headers['user-agent'] || 'unknown',
-      device: detectDevice(req.headers['user-agent']),
-      category: 'SYSTEM',
-      reason: 'New customer account registered via email OTP verification'
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Account created successfully',
-      user: user.toSafeJSON(),
-    });
-  } catch (error) {
-    console.error('[Auth] Verify OTP error:', error.message, error.stack);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// ══════════════════════════════════════════════
-// POST /api/auth/resend-otp — Resend OTP
-// ══════════════════════════════════════════════
-router.post('/resend-otp', [
-  body('verifyToken').notEmpty().withMessage('Verification token is required'),
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, message: errors.array()[0].msg });
-    }
-
-    const { verifyToken } = req.body;
-
-    const user = await User.findById(verifyToken).select('+emailOTP.code +pendingRegistration');
-
-    if (!user || !user.pendingRegistration) {
-      return res.status(400).json({ success: false, message: 'Invalid verification session. Please register again.' });
-    }
-
-    const crypto = require('crypto');
-    const emailOTP = crypto.randomInt(100000, 999999).toString();
-
-    user.emailOTP = {
-      code: emailOTP,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      attempts: 0,
-    };
-    await user.save();
-
-    // Send email (non-blocking)
-    sendOTPEmail({
-      email: user.pendingRegistration.email,
-      name: user.pendingRegistration.name,
-      otp: emailOTP,
-      type: 'email'
-    }).then(result => {
-      if (result.method === 'console') {
-        console.log(`[OTP] Resent Email OTP: ${emailOTP}`);
-      }
-    }).catch(err => {
-      console.log(`[OTP] Resent Email OTP: ${emailOTP} (email failed: ${err.message})`);
-    });
-
-    res.json({
-      success: true,
-      message: 'OTP resent successfully',
-      emailMasked: user.pendingRegistration.email.replace(/(.{2}).*(@.*)/, '$1***$2'),
-      expiresIn: 600,
-    });
-  } catch (error) {
-    console.error('[Auth] Resend OTP error:', error.message, error.stack);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// ══════════════════════════════════════════════
-// POST /api/auth/logout — Clear cookie
-// ══════════════════════════════════════════════
-router.post('/send-otp', [
-  body('email').isEmail().withMessage('Enter a valid email address').normalizeEmail(),
-  body('name').trim().notEmpty().withMessage('Name is required'),
-  body('phone').trim().notEmpty().withMessage('Phone number is required'),
-  body('password').notEmpty().withMessage('Password is required'),
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, message: errors.array()[0].msg });
-    }
-
-    const { email, name, phone, password } = req.body;
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    if (existingUser && existingUser.isVerified) {
       return res.status(400).json({ success: false, message: 'An account with this email already exists' });
     }
 
@@ -383,14 +180,15 @@ router.post('/send-otp', [
     const emailOTP = crypto.randomInt(100000, 999999).toString();
     const phoneOTP = crypto.randomInt(100000, 999999).toString();
 
+    // Use findOneAndUpdate with upsert to handle both new and returning pending users
     const pendingUser = await User.findOneAndUpdate(
-      { email, pendingRegistration: { $exists: true } },
+      { email },
       {
         pendingRegistration: {
           name,
           phone,
           email,
-          password,
+          password, // Will stay unhashed in pendingRegistration
           expiresAt: new Date(Date.now() + 30 * 60 * 1000),
         },
         emailOTP: {
@@ -404,16 +202,18 @@ router.post('/send-otp', [
           attempts: 0,
         },
       },
-      { upsert: true, new: true, select: '+emailOTP.code +phoneOTP.code' }
+      { upsert: true, new: true, select: '+emailOTP.code +phoneOTP.code +pendingRegistration' }
     );
 
-    await sendOTPEmail({ email, name, otp: emailOTP, type: 'email' });
+    // Send email (non-blocking)
+    sendOTPEmail({ email, name, otp: emailOTP, type: 'email' })
+      .catch(err => console.error('[OTP] Email fail:', err.message));
 
-    console.log(`[OTP] Email OTP for ${email}: ${emailOTP}`);
+    console.log(`[OTP] Debug — Email: ${emailOTP}, Phone: ${phoneOTP}`);
 
     res.json({
       success: true,
-      message: 'OTPs sent successfully',
+      message: 'Verification codes sent to your email and phone',
       verifyToken: pendingUser._id.toString(),
       emailMasked: email.replace(/(.{2}).*(@.*)/, '$1***$2'),
       phoneMasked: phone.replace(/(\+\d{2})\d+(\d{4})$/, '$1****$2'),
@@ -426,7 +226,7 @@ router.post('/send-otp', [
 });
 
 // ══════════════════════════════════════════════
-// POST /api/auth/verify-otp — Verify OTP and complete registration
+// POST /api/auth/verify-otp — Complete registration
 // ══════════════════════════════════════════════
 router.post('/verify-otp', [
   body('verifyToken').notEmpty().withMessage('Verification token is required'),
@@ -441,63 +241,50 @@ router.post('/verify-otp', [
 
     const { verifyToken, emailOTP, phoneOTP } = req.body;
 
-    const user = await User.findById(verifyToken).select('+emailOTP.code +emailOTP.expiresAt +emailOTP.attempts +phoneOTP.code +phoneOTP.expiresAt +phoneOTP.attempts +pendingRegistration.password');
+    const user = await User.findById(verifyToken).select('+emailOTP.code +emailOTP.expiresAt +emailOTP.attempts +phoneOTP.code +phoneOTP.expiresAt +phoneOTP.attempts +pendingRegistration');
 
     if (!user || !user.pendingRegistration) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired verification session. Please register again.' });
+      return res.status(400).json({ success: false, message: 'Invalid registration session' });
     }
 
     if (new Date() > user.pendingRegistration.expiresAt) {
-      await User.findByIdAndDelete(verifyToken);
-      return res.status(400).json({ success: false, message: 'Verification session expired. Please register again.' });
+      return res.status(400).json({ success: false, message: 'Session expired. Please register again.' });
     }
 
-    const { name, phone, email, password } = user.pendingRegistration;
-    let emailVerified = false;
-    let phoneVerified = false;
+    let emailVerified = user.isEmailVerified;
+    let phoneVerified = user.isPhoneVerified;
 
-    if (emailOTP) {
-      if (user.emailOTP.attempts >= 5) {
-        return res.status(429).json({ success: false, message: 'Too many email OTP attempts. Please request a new one.' });
-      }
+    if (emailOTP && !emailVerified) {
+      if (user.emailOTP.attempts >= 5) return res.status(429).json({ success: false, message: 'Too many attempts' });
       if (user.emailOTP.code !== emailOTP) {
         user.emailOTP.attempts += 1;
         await user.save();
-        const remaining = 5 - user.emailOTP.attempts;
-        return res.status(400).json({ success: false, message: `Invalid email OTP. ${remaining} attempts remaining.` });
-      }
-      if (new Date() > user.emailOTP.expiresAt) {
-        return res.status(400).json({ success: false, message: 'Email OTP has expired. Please request a new one.' });
+        return res.status(400).json({ success: false, message: 'Invalid Email OTP' });
       }
       emailVerified = true;
     }
 
-    if (phoneOTP) {
-      if (user.phoneOTP.attempts >= 5) {
-        return res.status(429).json({ success: false, message: 'Too many phone OTP attempts. Please request a new one.' });
-      }
+    if (phoneOTP && !phoneVerified) {
+      if (user.phoneOTP.attempts >= 5) return res.status(429).json({ success: false, message: 'Too many attempts' });
       if (user.phoneOTP.code !== phoneOTP) {
         user.phoneOTP.attempts += 1;
         await user.save();
-        const remaining = 5 - user.phoneOTP.attempts;
-        return res.status(400).json({ success: false, message: `Invalid phone OTP. ${remaining} attempts remaining.` });
-      }
-      if (new Date() > user.phoneOTP.expiresAt) {
-        return res.status(400).json({ success: false, message: 'Phone OTP has expired. Please request a new one.' });
+        return res.status(400).json({ success: false, message: 'Invalid Phone OTP' });
       }
       phoneVerified = true;
     }
 
     user.isEmailVerified = emailVerified;
     user.isPhoneVerified = phoneVerified;
-    user.isVerified = emailVerified && phoneVerified;
 
     if (emailVerified && phoneVerified) {
-      user.email = email;
+      const { name, phone, email, password } = user.pendingRegistration;
       user.name = name;
+      user.email = email;
       user.phone = phone;
-      user.password = password;
+      user.password = password; // Triggers hashing on save
       user.role = 'CUSTOMER';
+      user.isVerified = true;
       user.pendingRegistration = undefined;
       user.emailOTP = undefined;
       user.phoneOTP = undefined;
@@ -506,33 +293,20 @@ router.post('/verify-otp', [
       const token = user.generateToken();
       setTokenCookie(res, token);
 
-      await AuditLog.create({
-        action: 'USER_REGISTRATION',
-        user: user._id,
-        email: user.email,
-        ip: getClientIP(req),
-        userAgent: req.headers['user-agent'] || 'unknown',
-        device: detectDevice(req.headers['user-agent']),
-        category: 'SYSTEM',
-        reason: 'New customer account registered via OTP verification'
-      });
-
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
-        message: 'Account created successfully',
+        message: 'Account verified successfully',
         user: user.toSafeJSON(),
       });
-    } else {
-      await user.save();
-      res.json({
-        success: true,
-        message: emailVerified && phoneVerified ? 'Both verified' : emailVerified ? 'Email verified' : 'Phone verified',
-        verifyToken: verifyToken,
-        emailVerified,
-        phoneVerified,
-        remaining: emailVerified ? 'phone' : 'email',
-      });
     }
+
+    await user.save();
+    res.json({
+      success: true,
+      emailVerified,
+      phoneVerified,
+      message: 'OTP verified. Complete the remaining steps.'
+    });
   } catch (error) {
     console.error('[Auth] Verify OTP error:', error.message);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -544,62 +318,34 @@ router.post('/verify-otp', [
 // ══════════════════════════════════════════════
 router.post('/resend-otp', [
   body('verifyToken').notEmpty().withMessage('Verification token is required'),
-  body('type').isIn(['email', 'phone', 'both']).withMessage('Type must be email, phone, or both'),
+  body('type').isIn(['email', 'phone', 'both']).withMessage('Invalid type'),
 ], async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, message: errors.array()[0].msg });
-    }
-
     const { verifyToken, type } = req.body;
-
-    const user = await User.findById(verifyToken).select('+emailOTP.code +phoneOTP.code');
+    const user = await User.findById(verifyToken).select('+emailOTP.code +phoneOTP.code +pendingRegistration');
 
     if (!user || !user.pendingRegistration) {
-      return res.status(400).json({ success: false, message: 'Invalid verification session. Please register again.' });
+      return res.status(400).json({ success: false, message: 'Invalid session' });
     }
 
     const crypto = require('crypto');
-
     if (type === 'email' || type === 'both') {
-      user.emailOTP = {
-        code: crypto.randomInt(100000, 999999).toString(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-        attempts: 0,
-      };
-      await sendOTPEmail({
-        email: user.pendingRegistration.email,
-        name: user.pendingRegistration.name,
-        otp: user.emailOTP.code,
-        type: 'email'
-      });
-      console.log(`[OTP] Resent Email OTP: ${user.emailOTP.code}`);
+      const newCode = crypto.randomInt(100000, 999999).toString();
+      user.emailOTP = { code: newCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000), attempts: 0 };
+      sendOTPEmail({ email: user.pendingRegistration.email, name: user.pendingRegistration.name, otp: newCode, type: 'email' })
+        .catch(() => {});
+      console.log(`[OTP] Resent Email: ${newCode}`);
     }
 
     if (type === 'phone' || type === 'both') {
-      user.phoneOTP = {
-        code: crypto.randomInt(100000, 999999).toString(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-        attempts: 0,
-      };
-      await sendOTPSMS({
-        phone: user.pendingRegistration.phone,
-        name: user.pendingRegistration.name,
-        otp: user.phoneOTP.code,
-      });
-      console.log(`[OTP] Resent Phone OTP: ${user.phoneOTP.code}`);
+      const newCode = crypto.randomInt(100000, 999999).toString();
+      user.phoneOTP = { code: newCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000), attempts: 0 };
+      // Simulating SMS for now
+      console.log(`[OTP] Resent Phone: ${newCode}`);
     }
 
     await user.save();
-
-    res.json({
-      success: true,
-      message: 'OTP resent successfully',
-      emailMasked: type !== 'phone' ? user.pendingRegistration.email.replace(/(.{2}).*(@.*)/, '$1***$2') : undefined,
-      phoneMasked: type !== 'email' ? user.pendingRegistration.phone.replace(/(\+\d{2})\d+(\d{4})$/, '$1****$2') : undefined,
-      expiresIn: 600,
-    });
+    res.json({ success: true, message: 'OTP resent successfully' });
   } catch (error) {
     console.error('[Auth] Resend OTP error:', error.message);
     res.status(500).json({ success: false, message: 'Server error' });

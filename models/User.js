@@ -40,13 +40,18 @@ const UserSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
+    required: function() { 
+      // Only required if registration is NOT pending
+      return !this.pendingRegistration || !this.pendingRegistration.email; 
+    },
     minlength: [8, 'Password must be at least 8 characters'],
-    select: false, // Never return password in queries by default
+    select: false,
   },
   name: {
     type: String,
-    required: [true, 'Name is required'],
+    required: function() {
+      return !this.pendingRegistration || !this.pendingRegistration.email;
+    },
     trim: true,
     maxlength: [100, 'Name cannot exceed 100 characters'],
   },

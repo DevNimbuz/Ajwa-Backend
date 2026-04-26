@@ -93,6 +93,16 @@ const LeadSchema = new mongoose.Schema({
     ref: 'User',
     default: null,
   },
+  whatsappStatus: {
+    type: String,
+    enum: ['NONE', 'SENT', 'REPLIED', 'QUALIFIED', 'FAILED'],
+    default: 'NONE',
+  },
+  externalId: {
+    type: String, // From Excel/Facebook to prevent duplicates
+    unique: true,
+    sparse: true,
+  },
   customer: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
