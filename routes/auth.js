@@ -198,13 +198,8 @@ router.post('/send-otp', [
           expiresAt: new Date(Date.now() + 10 * 60 * 1000),
           attempts: 0,
         },
-        phoneOTP: {
-          code: phoneOTP,
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-          attempts: 0,
-        },
       },
-      { upsert: true, new: true, select: '+emailOTP.code +phoneOTP.code +pendingRegistration' }
+      { upsert: true, new: true, select: '+emailOTP.code +pendingRegistration' }
     );
 
     // Send email (non-blocking)
@@ -247,7 +242,7 @@ router.post('/verify-otp', [
       return res.status(400).json({ success: false, message: 'Invalid request: No session token.' });
     }
 
-    const user = await User.findById(verifyToken).select('+emailOTP.code +emailOTP.expiresAt +emailOTP.attempts +phoneOTP.code +phoneOTP.expiresAt +phoneOTP.attempts +pendingRegistration');
+    const user = await User.findById(verifyToken).select('+emailOTP.code +emailOTP.expiresAt +emailOTP.attempts +pendingRegistration');
 
     if (!user || !user.pendingRegistration) {
       return res.status(400).json({ success: false, message: 'Registration session not found or already completed.' });
@@ -257,54 +252,32 @@ router.post('/verify-otp', [
       return res.status(400).json({ success: false, message: 'Session expired. Please register again.' });
     }
 
-    let emailVerified = user.isEmailVerified;
-    let phoneVerified = user.isPhoneVerified;
-
-    // 4. Verify Email OTP if provided
-    if (emailOTP && !emailVerified) {
-      if (!user.emailOTP || !user.emailOTP.code) {
-        return res.status(400).json({ success: false, message: 'Email code session missing. Click Resend.' });
-      }
-      
-      if (user.emailOTP.attempts >= 10) return res.status(429).json({ success: false, message: 'Too many email attempts' });
-      
-      if (user.emailOTP.code !== emailOTP) {
-        user.emailOTP.attempts += 1;
-        await user.save();
-        return res.status(400).json({ success: false, message: 'The email code you entered is incorrect.' });
-      }
-      emailVerified = true;
+    // 4. Verify Email OTP
+    if (!user.emailOTP || !user.emailOTP.code) {
+      return res.status(400).json({ success: false, message: 'Email code session missing. Click Resend.' });
     }
-
-    // 5. Verify Phone OTP (if provided and needed)
-    if (phoneOTP && !phoneVerified) {
-      if (user.phoneOTP && user.phoneOTP.code) {
-        if (user.phoneOTP.attempts >= 10) return res.status(429).json({ success: false, message: 'Too many phone attempts' });
-        
-        if (user.phoneOTP.code !== phoneOTP) {
-          user.phoneOTP.attempts += 1;
-          await user.save();
-          return res.status(400).json({ success: false, message: 'The phone code you entered is incorrect.' });
-        }
-        phoneVerified = true;
-      }
-    }
-
-    user.isEmailVerified = emailVerified;
-    user.isPhoneVerified = phoneVerified;
-
-    if (emailVerified && phoneVerified) {
-      const { name, phone, email, password } = user.pendingRegistration;
-      user.name = name;
-      user.email = email;
-      user.phone = phone;
-      user.password = password; // Triggers hashing on save
-      user.role = 'CUSTOMER';
-      user.isVerified = true;
-      user.pendingRegistration = undefined;
-      user.emailOTP = undefined;
-      user.phoneOTP = undefined;
+    
+    if (user.emailOTP.attempts >= 10) return res.status(429).json({ success: false, message: 'Too many email attempts' });
+    
+    if (user.emailOTP.code !== emailOTP) {
+      user.emailOTP.attempts += 1;
       await user.save();
+      return res.status(400).json({ success: false, message: 'The email code you entered is incorrect.' });
+    }
+
+    // 5. Success: Finalize User
+    const { name, phone, email, password } = user.pendingRegistration;
+    user.name = name;
+    user.email = email;
+    user.phone = phone;
+    user.password = password; // Triggers hashing on save
+    user.role = 'CUSTOMER';
+    user.isVerified = true;
+    user.isEmailVerified = true;
+    user.isPhoneVerified = true; // Auto-verify phone as we are skipping official check
+    user.pendingRegistration = undefined;
+    user.emailOTP = undefined;
+    await user.save();
 
       const token = user.generateToken();
       setTokenCookie(res, token);
