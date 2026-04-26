@@ -92,7 +92,7 @@ router.post('/', [
   leadLimiter, 
   honeypotCheck,
   body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }),
-  body('email').optional({ checkFalsy: true }).isEmail().withMessage('Enter a valid email').normalizeEmail(),
+  body('email').optional({ checkFalsy: true }).isEmail().withMessage('Enter a valid email').normalizeEmail({ gmail_remove_dots: false }),
   body('phone').trim().notEmpty().withMessage('Phone is required'),
   body('message').optional().trim().isLength({ max: 2000 }),
 ], async (req, res) => {

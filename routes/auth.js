@@ -48,7 +48,7 @@ const { body, validationResult } = require('express-validator');
 // ══════════════════════════════════════════════
 router.post('/login', [
   loginLimiter,
-  body('email').isEmail().withMessage('Enter a valid email address').normalizeEmail(),
+  body('email').isEmail().withMessage('Enter a valid email address').normalizeEmail({ gmail_remove_dots: false }),
   body('password').notEmpty().withMessage('Password is required'),
 ], async (req, res) => {
   try {
@@ -159,7 +159,7 @@ router.post('/login', [
 // POST /api/auth/send-otp — Send OTP for registration (Email + Phone)
 // ══════════════════════════════════════════════
 router.post('/send-otp', [
-  body('email').isEmail().withMessage('Enter a valid email address').normalizeEmail(),
+  body('email').isEmail().withMessage('Enter a valid email address').normalizeEmail({ gmail_remove_dots: false }),
   body('name').trim().notEmpty().withMessage('Name is required'),
   body('phone').trim().notEmpty().withMessage('Phone number is required'),
   body('password').notEmpty().withMessage('Password is required'),
