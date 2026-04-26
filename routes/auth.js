@@ -247,7 +247,7 @@ router.post('/verify-otp', [
       return res.status(400).json({ success: false, message: 'Invalid request: No session token.' });
     }
 
-    const user = await User.findById(verifyToken).select('+emailOTP +phoneOTP +pendingRegistration');
+    const user = await User.findById(verifyToken).select('+emailOTP.code +emailOTP.expiresAt +emailOTP.attempts +phoneOTP.code +phoneOTP.expiresAt +phoneOTP.attempts +pendingRegistration');
 
     if (!user || !user.pendingRegistration) {
       return res.status(400).json({ success: false, message: 'Registration session not found or already completed.' });
