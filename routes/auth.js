@@ -279,23 +279,14 @@ router.post('/verify-otp', [
     user.emailOTP = undefined;
     await user.save();
 
-      const token = user.generateToken();
-      setTokenCookie(res, token);
+    const token = user.generateToken();
+    setTokenCookie(res, token);
 
-      return res.status(201).json({
-        success: true,
-        message: 'Account verified successfully',
-        user: user.toSafeJSON(),
-        token
-      });
-    }
-
-    await user.save();
-    res.json({
+    return res.status(201).json({
       success: true,
-      emailVerified,
-      phoneVerified,
-      message: 'OTP verified. Complete the remaining steps.'
+      message: 'Account verified successfully',
+      user: user.toSafeJSON(),
+      token
     });
   } catch (error) {
     console.error('[Auth] Verify OTP error:', error.message);
