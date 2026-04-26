@@ -115,6 +115,8 @@ const LeadSchema = new mongoose.Schema({
 });
 
 // ── Indexes for efficient querying ──
+LeadSchema.index({ phone: 1 }); // Fast lookup for WhatsApp click tracking
+LeadSchema.index({ email: 1 }); // Fast lookup for customer history
 LeadSchema.index({ createdAt: -1 }); // Sort by newest
 LeadSchema.index({ status: 1, createdAt: -1 }); // Filter by status
 LeadSchema.index({ assignedTo: 1 }); // Filter by assignment

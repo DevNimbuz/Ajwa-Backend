@@ -29,7 +29,7 @@ const globalLimiter = rateLimit({
  */
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10,
+  max: 5, // Reduced from 10
   message: {
     success: false,
     message: 'Too many login attempts — please try again after 15 minutes',
@@ -40,11 +40,11 @@ const loginLimiter = rateLimit({
 
 /**
  * Lead submission rate limiter
- * 10 submissions per hour per IP (prevents spam)
+ * 5 submissions per hour per IP (prevents spam)
  */
 const leadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10,
+  max: 5, // Reduced from 10
   message: {
     success: false,
     message: 'Too many submissions — please try again later',

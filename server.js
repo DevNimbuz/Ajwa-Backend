@@ -43,11 +43,13 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Next.js needs eval in some dev modes, inline for hydration
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:", "blob:"],
-      connectSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:", "blob:", "res.cloudinary.com"],
+      connectSrc: ["'self'", "https:", "wss:", "http://localhost:5000"], // Allow backend connections
+      frameAncestors: ["'none'"],
+      objectSrc: ["'none'"],
     },
   },
 }));
@@ -59,16 +61,14 @@ const allowedOrigins = [
   'https://www.flyajwa.com',
   'https://flyajwa.com',
   process.env.FRONTEND_URL,
-].filter(Boolean);
+].filter(origin => origin && origin !== 'undefined');
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, curl)
-    if (!origin) {
-      return callback(null, true);
-    }
+    // Allow requests with no origin (mobile apps, Postman)
+    if (!origin) return callback(null, true);
     
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.some(o => origin.startsWith(o))) {
       callback(null, true);
     } else {
       console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
