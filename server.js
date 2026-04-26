@@ -60,6 +60,7 @@ const allowedOrigins = [
   'http://localhost:3001',
   'https://www.flyajwa.com',
   'https://flyajwa.com',
+  'https://flyajwa2.vercel.app',
   process.env.FRONTEND_URL,
 ].filter(origin => origin && origin !== 'undefined');
 

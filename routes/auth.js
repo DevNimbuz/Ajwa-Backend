@@ -147,6 +147,7 @@ router.post('/login', [
     res.json({
       success: true,
       user: user.toSafeJSON(),
+      token
     });
   } catch (error) {
     console.error('[Auth] Login error:', error.message);
@@ -177,8 +178,9 @@ router.post('/send-otp', [
     }
 
     const crypto = require('crypto');
-    const emailOTP = crypto.randomInt(100000, 999999).toString();
-    const phoneOTP = crypto.randomInt(100000, 999999).toString();
+    const sharedOTP = crypto.randomInt(100000, 999999).toString();
+    const emailOTP = sharedOTP;
+    const phoneOTP = sharedOTP;
 
     // Use findOneAndUpdate with upsert to handle both new and returning pending users
     const pendingUser = await User.findOneAndUpdate(
@@ -297,6 +299,7 @@ router.post('/verify-otp', [
         success: true,
         message: 'Account verified successfully',
         user: user.toSafeJSON(),
+        token
       });
     }
 
