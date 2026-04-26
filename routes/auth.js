@@ -256,7 +256,11 @@ router.post('/verify-otp', [
     let emailVerified = user.isEmailVerified;
     let phoneVerified = user.isPhoneVerified;
 
+    // Defensive checks for OTP objects
     if (emailOTP && !emailVerified) {
+      if (!user.emailOTP) {
+        return res.status(400).json({ success: false, message: 'OTP session expired. Please resend code.' });
+      }
       if (user.emailOTP.attempts >= 5) return res.status(429).json({ success: false, message: 'Too many attempts' });
       if (user.emailOTP.code !== emailOTP) {
         user.emailOTP.attempts += 1;
@@ -267,6 +271,9 @@ router.post('/verify-otp', [
     }
 
     if (phoneOTP && !phoneVerified) {
+      if (!user.phoneOTP) {
+        return res.status(400).json({ success: false, message: 'OTP session expired. Please resend code.' });
+      }
       if (user.phoneOTP.attempts >= 5) return res.status(429).json({ success: false, message: 'Too many attempts' });
       if (user.phoneOTP.code !== phoneOTP) {
         user.phoneOTP.attempts += 1;
