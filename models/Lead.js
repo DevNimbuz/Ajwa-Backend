@@ -62,7 +62,6 @@ const LeadSchema = new mongoose.Schema({
   // ── Source & Tracking ──
   source: {
     type: String,
-    enum: ['website', 'whatsapp', 'phone', 'social', 'referral', 'other'],
     default: 'website',
   },
   // ── WhatsApp Click Tracking ──
