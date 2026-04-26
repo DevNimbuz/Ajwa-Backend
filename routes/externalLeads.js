@@ -49,15 +49,6 @@ router.post('/ingest', async (req, res) => {
       }]
     });
 
-    // 5. Trigger WhatsApp Automation
-    if (newLead.phone) {
-      const waResult = await sendWhatsAppGreeting(newLead.phone, newLead.name, newLead.destination);
-      if (waResult.success) {
-        newLead.whatsappStatus = 'SENT';
-        await newLead.save();
-      }
-    }
-
     res.status(201).json({ 
       success: true, 
       id: newLead._id, 

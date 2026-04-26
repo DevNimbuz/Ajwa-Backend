@@ -5,36 +5,38 @@
 const axios = require('axios');
 
 async function sendWhatsAppGreeting(phone, name, destination) {
-  const { WHATSAPP_API_KEY, WHATSAPP_PHONE_ID } = process.env;
+  const { WHATSAPP_API_TOKEN, WHATSAPP_PHONE_NUMBER_ID } = process.env;
 
-  if (!WHATSAPP_API_KEY || !WHATSAPP_PHONE_ID) {
+  if (!WHATSAPP_API_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
     console.log(`[WhatsApp] Simulation: Auto-greeting sent to ${name} (${phone}) regarding ${destination}`);
     return { success: true, status: 'Simulated' };
   }
 
+  // Sanitize phone number (remove +, spaces, etc)
+  const cleanPhone = phone.replace(/\D/g, '');
+
   try {
-    // Official Meta Cloud API Implementation Template
     const response = await axios.post(
-      `https://graph.facebook.com/v17.0/${WHATSAPP_PHONE_ID}/messages`,
+      `https://graph.facebook.com/v17.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: "whatsapp",
-        to: phone,
+        to: cleanPhone,
         type: "template",
         template: {
-          name: "lead_greeting_v1", // Must be pre-approved in Meta Manager
-          language: { code: "en_GB" },
+          name: "new_lead_greeting",
+          language: { code: "en_US" },
           components: [
             {
               type: "body",
               parameters: [
                 { type: "text", text: name },
-                { type: "text", text: destination || "your dream vacation" }
+                { type: "text", text: destination || "FlyAjwa Holidays" }
               ]
             }
           ]
         }
       },
-      { headers: { Authorization: `Bearer ${WHATSAPP_API_KEY}` } }
+      { headers: { Authorization: `Bearer ${WHATSAPP_API_TOKEN}` } }
     );
 
     return { success: true, messageId: response.data.messages[0].id };

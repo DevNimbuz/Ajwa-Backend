@@ -137,7 +137,10 @@ router.post('/', [
       // Not logged in or invalid token - continue without customer link
     }
 
-    // Create the lead
+    // Create the lead with Automatic Staff Assignment
+    const { getNextAvailableStaff } = require('../utils/assignment');
+    const assignedStaffId = await getNextAvailableStaff();
+
     const leadData = {
       name: name.trim(),
       email: email?.trim(),
@@ -150,6 +153,7 @@ router.post('/', [
       serviceDetails,
       selectedDays, selectedFlight, selectedHotelStar, selectedGroupSize, quotedPrice,
       utmSource, utmMedium, utmCampaign, referrer,
+      assignedTo: assignedStaffId, // Round-Robin Assignment
     };
 
     if (customerId) {
