@@ -180,9 +180,9 @@ router.post('/', [
 });
 
 // ══════════════════════════════════════════════
-// POST /api/leads/whatsapp-click — Track WhatsApp button clicks (PUBLIC)
+// POST /api/leads/whatsapp-click — Track WhatsApp button clicks (PUBLIC — rate limited + honeypot)
 // ══════════════════════════════════════════════
-router.post('/whatsapp-click', async (req, res) => {
+router.post('/whatsapp-click', [leadLimiter, honeypotCheck], async (req, res) => {
   try {
     const { phone, name, destination, packageSlug, page, selectedOptions } = req.body;
 
@@ -262,11 +262,13 @@ router.get('/', requireAuth, requireAnyAdmin, async (req, res) => {
 
     // Search filter (name, email, phone, destination)
     if (search) {
+      // Escape regex special characters to prevent ReDoS (M3)
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
-        { destination: { $regex: search, $options: 'i' } },
+        { name: { $regex: escapedSearch, $options: 'i' } },
+        { email: { $regex: escapedSearch, $options: 'i' } },
+        { phone: { $regex: escapedSearch, $options: 'i' } },
+        { destination: { $regex: escapedSearch, $options: 'i' } },
       ];
     }
 
@@ -377,10 +379,20 @@ router.get('/export', requireAuth, requireAnyAdmin, async (req, res) => {
     const scopedFilter = mergeFilters(filter, buildLeadAccessFilter(req.user));
     const leads = await Lead.find(scopedFilter).sort({ createdAt: -1 }).populate('assignedTo', 'name');
 
-    // Build CSV
+    // Build CSV with injection protection (M2)
+    const escapeCSV = (val) => {
+      if (val === undefined || val === null) return '';
+      let str = String(val);
+      // CSV injection protection: prefix with single quote if it starts with risky chars
+      if (['=', '+', '-', '@'].some(char => str.startsWith(char))) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
     const headers = 'Name,Email,Phone,Destination,Source,Status,Priority,Assigned To,Message,Created At\n';
     const rows = leads.map(l =>
-      `"${l.name}","${l.email || ''}","${l.phone}","${l.destination || ''}","${l.source}","${l.status}","${l.priority}","${l.assignedTo?.name || 'Unassigned'}","${(l.message || '').replace(/"/g, '""')}","${l.createdAt.toISOString()}"`
+      `${escapeCSV(l.name)},${escapeCSV(l.email)},${escapeCSV(l.phone)},${escapeCSV(l.destination)},${escapeCSV(l.source)},${escapeCSV(l.status)},${escapeCSV(l.priority)},${escapeCSV(l.assignedTo?.name || 'Unassigned')},${escapeCSV(l.message)},"${l.createdAt.toISOString()}"`
     ).join('\n');
 
     await AuditLog.create({

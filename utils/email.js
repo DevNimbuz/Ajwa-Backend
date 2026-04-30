@@ -164,4 +164,48 @@ async function sendOTPSMS({ phone, name, otp }) {
   }
 }
 
-module.exports = { sendLeadNotification, sendOTPEmail, sendOTPSMS };
+/**
+ * Sends Password Reset email
+ * @param {Object} data - { email, name, resetUrl }
+ */
+async function sendPasswordResetEmail({ email, name, resetUrl }) {
+  const transport = getTransporter();
+  
+  const html = `
+    <div style="font-family:'Segoe UI',sans-serif;max-width:500px;margin:0 auto;padding:20px;">
+      <div style="background:linear-gradient(135deg,#1e2a4a,#2a3f5f);color:#fff;padding:32px;border-radius:16px 16px 0 0;text-align:center;">
+        <h2 style="margin:0;font-size:22px;">Reset Your Password</h2>
+        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">FlyAjwa Travel Account Recovery</p>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;padding:32px;border-radius:0 0 16px 16px;text-align:center;">
+        <p style="color:#334155;font-size:15px;margin:0 0 24px;">Hello ${name}, you requested to reset your password. Click the button below to choose a new one:</p>
+        <a href="${resetUrl}" style="display:inline-block;background:#63ab45;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">Reset Password →</a>
+        <p style="color:#94a3b8;font-size:12px;margin:24px 0 0;">This link will expire in <strong>1 hour</strong>. If you didn't request this, you can safely ignore this email.</p>
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid #f1f5f9;font-size:11px;color:#cbd5e1;">
+          If the button doesn't work, copy and paste this link into your browser:<br>
+          <a href="${resetUrl}" style="color:#2563eb;word-break:break-all;">${resetUrl}</a>
+        </div>
+      </div>
+    </div>`;
+
+  if (!transport) {
+    console.log(`[Email] Password Reset Link for ${email}: ${resetUrl}`);
+    return { success: true, method: 'console' };
+  }
+
+  try {
+    await transport.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: email,
+      subject: `🔐 FlyAjwa Password Reset Request`,
+      html,
+    });
+    console.log(`[Email] Reset link sent to ${email}`);
+    return { success: true, method: 'email' };
+  } catch (error) {
+    console.error('[Email] Reset failed:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+module.exports = { sendLeadNotification, sendOTPEmail, sendOTPSMS, sendPasswordResetEmail };

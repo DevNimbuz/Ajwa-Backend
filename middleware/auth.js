@@ -31,14 +31,8 @@ const requireAuth = async (req, res, next) => {
     }
 
     if (!token) {
-      await AuditLog.create({
-        action: 'UNAUTHORIZED_ACCESS',
-        ip: getClientIP(req),
-        userAgent: req.headers['user-agent'] || 'unknown',
-        device: detectDevice(req.headers['user-agent']),
-        category: 'HAZARD',
-        reason: `Attempted to access protected resource [${req.originalUrl}] without authentication`
-      });
+      // HIGH-4 FIX: Log to console only — AuditLog.create here causes DB write amplification under attack
+      console.warn(`[Auth] Unauthorized access attempt: ${req.originalUrl} from ${getClientIP(req)}`);
       return res.status(401).json({ success: false, message: 'Not authorized — no token provided' });
     }
 
@@ -66,25 +60,10 @@ const requireAuth = async (req, res, next) => {
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
-      await AuditLog.create({
-        action: 'UNAUTHORIZED_ACCESS',
-        ip: getClientIP(req),
-        userAgent: req.headers['user-agent'] || 'unknown',
-        device: detectDevice(req.headers['user-agent']),
-        category: 'HAZARD',
-        reason: `Access denied: Invalid security token provided for [${req.originalUrl}]`
-      });
+      console.warn(`[Auth] Invalid token for ${req.originalUrl} from ${getClientIP(req)}`);
       return res.status(401).json({ success: false, message: 'Invalid token' });
     }
     if (error.name === 'TokenExpiredError') {
-      await AuditLog.create({
-        action: 'UNAUTHORIZED_ACCESS',
-        ip: getClientIP(req),
-        userAgent: req.headers['user-agent'] || 'unknown',
-        device: detectDevice(req.headers['user-agent']),
-        category: 'HAZARD',
-        reason: `Access denied: Security token expired while accessing [${req.originalUrl}]`
-      });
       return res.status(401).json({ success: false, message: 'Token expired — please login again' });
     }
     return res.status(500).json({ success: false, message: 'Authentication error' });

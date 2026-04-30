@@ -2,106 +2,88 @@
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * FlyAjwa Backend — CSRF Protection Middleware
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * Provides double-submit cookie pattern CSRF protection
- * for sensitive operations like password changes, profile updates, etc.
+ * Double-submit cookie pattern:
+ * 1. Server sets a random CSRF token in a readable cookie
+ * 2. Client reads the cookie and sends it back as X-CSRF-Token header
+ * 3. Server verifies the header matches the cookie
+ * 
+ * This works because an attacker can trigger requests with cookies
+ * but cannot read cross-origin cookies to set the header.
  */
 
 const crypto = require('crypto');
 
 /**
- * Generate a CSRF token for a session
- * @param {string} sessionId - User's session or user ID
- * @returns {string} CSRF token
+ * Generate a cryptographically random CSRF token
  */
-function generateCSRFToken(sessionId) {
-  const timestamp = Date.now().toString(36);
-  const random = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.createHash('sha256')
-    .update(`${sessionId}:${timestamp}:${random}:${process.env.JWT_SECRET}`)
-    .digest('hex');
-  return `${timestamp}.${random}.${hash}`;
+function generateCSRFToken() {
+  return crypto.randomBytes(32).toString('hex');
 }
 
 /**
- * Verify a CSRF token
- * @param {string} token - The token to verify
- * @param {string} sessionId - The user's session ID
- * @returns {boolean} Whether the token is valid
- */
-function verifyCSRFToken(token, sessionId) {
-  if (!token || !sessionId) return false;
-  
-  const parts = token.split('.');
-  if (parts.length !== 3) return false;
-  
-  const [timestamp, random, hash] = parts;
-  
-  // Token expires after 1 hour
-  const tokenAge = Date.now() - parseInt(timestamp, 36);
-  if (tokenAge > 60 * 60 * 1000) return false;
-  
-  const expectedHash = crypto.createHash('sha256')
-    .update(`${sessionId}:${timestamp}:${random}:${process.env.JWT_SECRET}`)
-    .digest('hex');
-  
-  return hash === expectedHash;
-}
-
-/**
- * Middleware: CSRF protection for sensitive routes
- * Checks X-CSRF-Token header against the token in the request
+ * Middleware: CSRF protection using double-submit cookie pattern
+ * Mounted globally — works without req.user
  */
 function csrfProtection(req, res, next) {
   // Skip for safe HTTP methods
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    // Ensure a CSRF cookie exists for subsequent POST/PUT/DELETE
+    if (!req.cookies._csrf) {
+      const token = generateCSRFToken();
+      const isProd = process.env.NODE_ENV === 'production';
+      res.cookie('_csrf', token, {
+        httpOnly: false,    // Must be readable by JS
+        secure: isProd,
+        sameSite: isProd ? 'None' : 'Lax',
+        maxAge: 24 * 60 * 60 * 1000,
+      });
+    }
     return next();
   }
-  
-  // Get token from header
-  const token = req.headers['x-csrf-token'];
-  
-  // Get session ID from JWT token if available
-  let sessionId = 'anonymous';
-  if (req.user && req.user._id) {
-    sessionId = req.user._id.toString();
-  }
-  
-  // In production, require CSRF token for authenticated users
-  if (process.env.NODE_ENV === 'production' && req.user && !token) {
-    return res.status(403).json({ 
-      success: false, 
-      message: 'CSRF token required. Include X-CSRF-Token header.' 
-    });
-  }
-  
-  // Verify token if provided
-  if (token && !verifyCSRFToken(token, sessionId)) {
-    console.warn(`[CSRF] Invalid token from user ${sessionId} at ${req.path}`);
-    return res.status(403).json({ 
-      success: false, 
-      message: 'Invalid CSRF token' 
-    });
-  }
-  
-  // Generate new token for authenticated users
-  if (req.user) {
-    const csrfToken = generateCSRFToken(sessionId);
-    res.setHeader('X-CSRF-Token', csrfToken);
-  }
-  
-  next();
-}
 
-/**
- * Get CSRF token for current user (used in login responses)
- */
-function getCSRFTokenForUser(userId) {
-  return generateCSRFToken(userId.toString());
+  // For state-changing requests: require matching header + cookie
+  const cookieToken = req.cookies._csrf;
+  const headerToken = req.headers['x-csrf-token'];
+
+  // If no auth cookie present, this is an unauthenticated request (public forms)
+  // Still allow — the auth middleware will reject unauthorized access downstream
+  if (!req.cookies.token) {
+    return next();
+  }
+
+  // Authenticated state-changing request: enforce CSRF
+  if (!cookieToken || !headerToken) {
+    return res.status(403).json({
+      success: false,
+      message: 'CSRF token missing. Please refresh the page and try again.',
+    });
+  }
+
+  // Constant-time comparison to prevent timing attacks
+  if (cookieToken.length !== headerToken.length || 
+      !crypto.timingSafeEqual(Buffer.from(cookieToken), Buffer.from(headerToken))) {
+    console.warn(`[CSRF] Token mismatch at ${req.path}`);
+    return res.status(403).json({
+      success: false,
+      message: 'Invalid CSRF token. Please refresh the page and try again.',
+    });
+  }
+
+  // Rotate token after each state-changing request
+  const newToken = generateCSRFToken();
+  const isProd = process.env.NODE_ENV === 'production';
+  res.cookie('_csrf', newToken, {
+    httpOnly: false,
+    secure: isProd,
+    sameSite: isProd ? 'None' : 'Lax',
+    maxAge: 24 * 60 * 60 * 1000,
+  });
+
+  next();
 }
 
 module.exports = { 
   generateCSRFToken, 
-  verifyCSRFToken, 
   csrfProtection,
-  getCSRFTokenForUser
 };
+

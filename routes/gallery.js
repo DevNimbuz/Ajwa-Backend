@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Gallery = require('../models/Gallery');
-const { requireAuth, requireAnyAdmin } = require('../middleware/auth');
+const { requireAuth, requireAnyAdmin, requireSuperAdmin } = require('../middleware/auth');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { validateFile, sanitizeFilename } = require('../middleware/uploadValidator');
@@ -121,9 +121,9 @@ router.post('/', requireAuth, requireAnyAdmin, upload.array('images', 20), async
 });
 
 // ══════════════════════════════════════════════
-// DELETE /api/gallery/:id — Admin Delete
+// DELETE /api/gallery/:id — Super Admin Delete (M6)
 // ══════════════════════════════════════════════
-router.delete('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
+router.delete('/:id', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const doc = await Gallery.findById(req.params.id);
     if (!doc) return res.status(404).json({ success: false, message: 'Not found' });
@@ -141,9 +141,9 @@ router.delete('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════
-// POST /api/gallery/bulk-delete — Admin Bulk Delete
+// POST /api/gallery/bulk-delete — Super Admin Bulk Delete (M6)
 // ══════════════════════════════════════════════
-router.post('/bulk-delete', requireAuth, requireAnyAdmin, async (req, res) => {
+router.post('/bulk-delete', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {

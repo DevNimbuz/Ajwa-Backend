@@ -17,7 +17,7 @@ const AuditLog = require('../models/AuditLog');
 const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
 const { loginLimiter } = require('../middleware/rateLimiter');
 const { getClientIP, detectDevice } = require('../middleware/security');
-const { sendOTPEmail } = require('../utils/email');
+const { sendOTPEmail, sendPasswordResetEmail } = require('../utils/email');
 
 /**
  * Utility: Set secure HttpOnly cookie
@@ -28,7 +28,7 @@ const setTokenCookie = (res, token) => {
     httpOnly: true,
     secure: isProd,                      // HTTPS only in production
     sameSite: isProd ? 'None' : 'Lax',  // None = cross-domain (Vercel → Render)
-    // No 'expires' or 'Max-Age' -> Session Cookie (clears on browser close)
+    maxAge: 24 * 60 * 60 * 1000,        // 24 hours (match JWT expiry)
   });
 };
 
@@ -147,7 +147,7 @@ router.post('/login', [
     res.json({
       success: true,
       user: user.toSafeJSON(),
-      token
+      // Removed token from body for H5 security (Cookie-Only Auth)
     });
   } catch (error) {
     console.error('[Auth] Login error:', error.message);
@@ -178,9 +178,13 @@ router.post('/send-otp', [
     }
 
     const crypto = require('crypto');
+    const bcrypt = require('bcryptjs');
     const sharedOTP = crypto.randomInt(100000, 999999).toString();
     const emailOTP = sharedOTP;
-    const phoneOTP = sharedOTP;
+
+    // Pre-hash password before storing — no plaintext ever hits the DB
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     // Use findOneAndUpdate with upsert to handle both new and returning pending users
     const pendingUser = await User.findOneAndUpdate(
@@ -190,7 +194,7 @@ router.post('/send-otp', [
           name,
           phone,
           email,
-          password, // Will stay unhashed in pendingRegistration
+          password: hashedPassword, // Stored hashed — never plaintext
           expiresAt: new Date(Date.now() + 30 * 60 * 1000),
         },
         emailOTP: {
@@ -206,7 +210,7 @@ router.post('/send-otp', [
     sendOTPEmail({ email, name, otp: emailOTP, type: 'email' })
       .catch(err => console.error('[OTP] Email fail:', err.message));
 
-    console.log(`[OTP] Debug — Email: ${emailOTP}, Phone: ${phoneOTP}`);
+    // Removed OTP console.log for C3 security (Production Logging)
 
     res.json({
       success: true,
@@ -270,13 +274,16 @@ router.post('/verify-otp', [
     user.name = name;
     user.email = email;
     user.phone = phone;
-    user.password = password; // Triggers hashing on save
+    user.password = password; // Already hashed in pendingRegistration
     user.role = 'CUSTOMER';
     user.isVerified = true;
     user.isEmailVerified = true;
     user.isPhoneVerified = true; // Auto-verify phone as we are skipping official check
     user.pendingRegistration = undefined;
     user.emailOTP = undefined;
+    
+    // Prevent the pre-save hook from re-hashing the already hashed password
+    user._skipPasswordHook = true;
     await user.save();
 
     const token = user.generateToken();
@@ -286,7 +293,7 @@ router.post('/verify-otp', [
       success: true,
       message: 'Account verified successfully',
       user: user.toSafeJSON(),
-      token
+      // Removed token from body for H5 security
     });
   } catch (error) {
     console.error('[Auth] Verify OTP error:', error.message);
@@ -321,8 +328,7 @@ router.post('/resend-otp', [
     if (type === 'phone' || type === 'both') {
       const newCode = crypto.randomInt(100000, 999999).toString();
       user.phoneOTP = { code: newCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000), attempts: 0 };
-      // Simulating SMS for now
-      console.log(`[OTP] Resent Phone: ${newCode}`);
+      // Simulating SMS for now — No console.log in production (C3)
     }
 
     await user.save();
@@ -644,6 +650,82 @@ router.put('/password', requireAuth, async (req, res) => {
     res.json({ success: true, message: 'Password updated successfully and all other sessions revoked' });
   } catch (error) {
     console.error('[Auth] Password change error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// POST /api/auth/forgot-password — Request reset token (H8)
+// ══════════════════════════════════════════════
+router.post('/forgot-password', [
+  body('email').isEmail().withMessage('Enter a valid email').normalizeEmail({ gmail_remove_dots: false }),
+], async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    // Always return success to prevent email enumeration (Security Best Practice)
+    if (!user) {
+      return res.json({ success: true, message: 'If an account exists with that email, a reset link has been sent.' });
+    }
+
+    // Generate reset token (random 32 bytes hex)
+    const crypto = require('crypto');
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    
+    // Store hashed token and expiry (1 hour)
+    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.resetPasswordExpire = Date.now() + 3600000; 
+    
+    await user.save();
+
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
+
+    // Send email
+    await sendPasswordResetEmail({ 
+      email: user.email, 
+      name: user.name, 
+      resetUrl 
+    });
+
+    res.json({ success: true, message: 'If an account exists with that email, a reset link has been sent.' });
+  } catch (error) {
+    console.error('[Auth] Forgot password error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// POST /api/auth/reset-password — Complete reset (H8)
+// ══════════════════════════════════════════════
+router.post('/reset-password/:token', [
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+], async (req, res) => {
+  try {
+    const crypto = require('crypto');
+    const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
+    }
+
+    // Update password (pre-save hook handles hashing)
+    user.password = req.body.password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    user.tokenVersion = (user.tokenVersion || 0) + 1; // Invalidate all other sessions
+    
+    await user.save();
+
+    res.json({ success: true, message: 'Password has been reset successfully. You can now login.' });
+  } catch (error) {
+    console.error('[Auth] Reset password error:', error.message);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

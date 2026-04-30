@@ -17,9 +17,11 @@ const helmet = require('helmet');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const mongoSanitize = require('express-mongo-sanitize');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const { globalLimiter } = require('./middleware/rateLimiter');
 const { sanitizeBody } = require('./middleware/security');
+const { csrfProtection } = require('./middleware/csrf');
 
 // ── Initialize Express ──
 const app = express();
@@ -29,9 +31,6 @@ app.set('trust proxy', 1);
 
 // Enable Gzip Compression (huge performance boost on JSON responses)
 app.use(compression());
-
-// ── Connect to MongoDB ──
-connectDB();
 
 // ══════════════════════════════════════════════
 // MIDDLEWARE
@@ -43,33 +42,34 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Next.js needs eval in some dev modes, inline for hydration
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:", "res.cloudinary.com"],
-      connectSrc: ["'self'", "https:", "wss:", "http://localhost:5000"], // Allow backend connections
+      connectSrc: ["'self'", "https:", "wss:", "http://localhost:5000"],
       frameAncestors: ["'none'"],
       objectSrc: ["'none'"],
     },
   },
 }));
 
-// CORS — allow only whitelisted frontend domains
-const allowedOrigins = [
+// CORS — allow only exact whitelisted frontend domains (CRIT-1 FIX)
+const allowedOrigins = new Set([
   'http://localhost:3000',
   'http://localhost:3001',
   'https://www.flyajwa.com',
   'https://flyajwa.com',
   'https://flyajwa2.vercel.app',
   process.env.FRONTEND_URL,
-].filter(origin => origin && origin !== 'undefined');
+].filter(origin => origin && origin !== 'undefined'));
 
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, Postman)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.some(o => origin.startsWith(o))) {
+    // CRIT-1 FIX: Exact match only — no prefix matching
+    if (allowedOrigins.has(origin)) {
       callback(null, true);
     } else {
       console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
@@ -100,15 +100,21 @@ app.use('/api/', globalLimiter);
 // Sanitize all request bodies (XSS prevention)
 app.use(sanitizeBody);
 
+// CRIT-2 FIX: Mount CSRF protection globally for all state-changing requests
+app.use('/api/', csrfProtection);
+
 // ══════════════════════════════════════════════
 // API ROUTES
 // ══════════════════════════════════════════════
 
-// Health check
+// Health check — includes DB readiness (HIGH-2 FIX)
 app.get('/api/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'FlyAjwa API is running',
+  const dbReady = mongoose.connection.readyState === 1;
+  const status = dbReady ? 200 : 503;
+  res.status(status).json({
+    success: dbReady,
+    message: dbReady ? 'FlyAjwa API is running' : 'Database not ready',
+    database: dbReady ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
   });
@@ -166,18 +172,24 @@ app.use((err, req, res, next) => {
 });
 
 // ══════════════════════════════════════════════
-// START SERVER
+// START SERVER — Await DB before listening (HIGH-2 FIX)
 // ══════════════════════════════════════════════
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-  console.log(`  🚀 FlyAjwa API running on port ${PORT}`);
-  console.log(`  📍 http://localhost:${PORT}/api/health`);
-  console.log(`  🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
-});
+async function startServer() {
+  await connectDB();
+  
+  app.listen(PORT, () => {
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`  🚀 FlyAjwa API running on port ${PORT}`);
+    console.log(`  📍 http://localhost:${PORT}/api/health`);
+    console.log(`  🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+  });
+}
+
+startServer();
 
 module.exports = app;
- 
+

@@ -1,18 +1,30 @@
 const express = require('express');
 const router = express.Router();
 const Lead = require('../models/Lead');
+const rateLimit = require('express-rate-limit');
 const { getNextAvailableStaff } = require('../utils/assignment');
 const { sendWhatsAppGreeting } = require('../utils/whatsapp');
+
+// MED-3 FIX: Rate limit external lead ingestion (30 leads per 15 minutes per IP)
+const ingestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { success: false, message: 'Too many ingestion requests. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 /**
  * @route   POST /api/leads/ingest
  * @desc    Ingest external leads from Excel/n8n/Make
  * @access  Private (API-KEY Protected)
  */
-router.post('/ingest', async (req, res) => {
-  const { apiKey, name, email, phone, destination, source, externalId, budget } = req.body;
+router.post('/ingest', ingestLimiter, async (req, res) => {
+  const { name, email, phone, destination, source, externalId, budget } = req.body;
+  const authHeader = req.headers.authorization;
+  const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : req.headers['x-api-key'];
 
-  // 1. Authorization
+  // 1. Authorization (H7: Use Headers instead of Body)
   if (!apiKey || apiKey !== process.env.EXTERNAL_API_KEY) {
     return res.status(401).json({ success: false, message: 'Unauthorized access' });
   }

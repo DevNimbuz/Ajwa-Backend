@@ -29,7 +29,12 @@ const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-
 // ══════════════════════════════════════════════
 router.get('/', requireAnyAdmin, async (req, res) => {
   try {
-    const users = await User.find({ role: { $in: ['SUPER_ADMIN', 'TEAM'] } }).select('-password').sort({ createdAt: -1 });
+    // MED-1 FIX: TEAM users only see name/email/role. SUPER_ADMIN sees full data.
+    const isSuperAdmin = req.user.role === 'SUPER_ADMIN';
+    const selectFields = isSuperAdmin
+      ? '-password -resetPasswordToken -resetPasswordExpire'
+      : 'name email role isActive createdAt';
+    const users = await User.find({ role: { $in: ['SUPER_ADMIN', 'TEAM'] } }).select(selectFields).sort({ createdAt: -1 });
     res.json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
@@ -45,16 +50,19 @@ router.get('/customers', requireAnyAdmin, async (req, res) => {
     const query = { role: 'CUSTOMER' };
     
     if (search) {
+      // Escape regex special characters to prevent ReDoS
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
+        { name: { $regex: escapedSearch, $options: 'i' } },
+        { email: { $regex: escapedSearch, $options: 'i' } },
+        { phone: { $regex: escapedSearch, $options: 'i' } },
       ];
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    // MED-1 FIX: Strip auth-state internals from customer responses
     const customers = await User.find(query)
-      .select('-password -tokenVersion -verificationToken')
+      .select('-password -tokenVersion -verificationToken -resetPasswordToken -resetPasswordExpire -failedLoginAttempts -lockUntil -emailOTP -phoneOTP -pendingRegistration')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -102,6 +110,21 @@ router.get('/customers/:id', requireAnyAdmin, async (req, res) => {
 router.put('/customers/:id', requireAnyAdmin, async (req, res) => {
   try {
     const { name, url, type } = req.body;
+
+    // MED-2 FIX: Validate document URL — only allow whitelisted hosts
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ success: false, message: 'Document URL is required' });
+    }
+    try {
+      const parsed = new URL(url);
+      const allowedHosts = ['res.cloudinary.com', 'cloudinary.com', 'flyajwa.com', 'www.flyajwa.com'];
+      if (!['https:'].includes(parsed.protocol) || !allowedHosts.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
+        return res.status(400).json({ success: false, message: 'Only Cloudinary or FlyAjwa hosted documents are allowed' });
+      }
+    } catch {
+      return res.status(400).json({ success: false, message: 'Invalid document URL' });
+    }
+
     const customer = await User.findById(req.params.id);
     
     if (!customer || customer.role !== 'CUSTOMER') {

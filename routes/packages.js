@@ -156,7 +156,18 @@ router.get('/:slug/pricing', async (req, res) => {
 // ══════════════════════════════════════════════
 router.post('/', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
-    const pkg = await Package.create(req.body);
+    const allowedFields = [
+      'slug', 'name', 'title', 'description', 'tagline', 'heroImg', 
+      'gallery', 'highlights', 'itinerary', 'included', 'excluded', 
+      'faqs', 'snapshots', 'variants', 'isActive', 'sortOrder'
+    ];
+    
+    const filteredBody = {};
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) filteredBody[field] = req.body[field];
+    });
+
+    const pkg = await Package.create(filteredBody);
     clearCache('/api/packages');
 
     await AuditLog.create({
@@ -185,7 +196,18 @@ router.post('/', requireAuth, requireSuperAdmin, async (req, res) => {
 // ══════════════════════════════════════════════
 router.put('/:id', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
-    const pkg = await Package.findByIdAndUpdate(req.params.id, req.body, {
+    const allowedFields = [
+      'slug', 'name', 'title', 'description', 'tagline', 'heroImg', 
+      'gallery', 'highlights', 'itinerary', 'included', 'excluded', 
+      'faqs', 'snapshots', 'variants', 'isActive', 'sortOrder'
+    ];
+    
+    const filteredBody = {};
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) filteredBody[field] = req.body[field];
+    });
+
+    const pkg = await Package.findByIdAndUpdate(req.params.id, filteredBody, {
       new: true,
       runValidators: true,
     });

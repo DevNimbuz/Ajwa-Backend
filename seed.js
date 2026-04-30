@@ -256,15 +256,26 @@ const packagesData = [
 // ═══════════════════════════════════════════════
 async function seed() {
   try {
+    // CRIT-3 FIX: Block seeding in production
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ Seed script is disabled in production. Use platform dashboard to manage admin accounts.');
+      process.exit(1);
+    }
+
     console.log('\n🌱 Seeding FlyAjwa database...\n');
 
     // Connect to MongoDB
     await mongoose.connect(process.env.MONGO_URI);
     console.log('✅ Connected to MongoDB\n');
 
-    // 1. Create Super Admin
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@flyajwa.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'FlyAjwa@Admin2026!';
+    // 1. Create Super Admin — CRIT-3 FIX: Require env vars, no hardcoded defaults
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (!adminEmail || !adminPassword) {
+      console.error('❌ ADMIN_EMAIL and ADMIN_PASSWORD env vars are required for seeding.');
+      process.exit(1);
+    }
 
     let admin = await User.findOne({ email: adminEmail });
     if (!admin) {

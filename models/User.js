@@ -80,6 +80,14 @@ const UserSchema = new mongoose.Schema({
     type: String,
     select: false,
   },
+  resetPasswordToken: {
+    type: String,
+    select: false,
+  },
+  resetPasswordExpire: {
+    type: Date,
+    select: false,
+  },
   // ── OTP Verification Fields ──
   emailOTP: {
     code: { type: String, select: false },
@@ -133,6 +141,12 @@ const UserSchema = new mongoose.Schema({
 // ── Pre-save: Hash password if modified ──
 UserSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
+
+  // Allow bypassing for pre-hashed passwords (e.g., OTP registration finalization)
+  if (this._skipPasswordHook) {
+    this._skipPasswordHook = undefined; // Clear the flag
+    return next();
+  }
 
   // Enforce password complexity
   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;

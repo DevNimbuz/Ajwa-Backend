@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const Testimonial = require('../models/Testimonial');
-const { requireAuth, requireAnyAdmin } = require('../middleware/auth');
+const { requireAuth, requireAnyAdmin, requireSuperAdmin } = require('../middleware/auth');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { validateFile, sanitizeFilename } = require('../middleware/uploadValidator');
+const { leadLimiter } = require('../middleware/rateLimiter');
+const { honeypotCheck } = require('../middleware/security');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -29,8 +31,8 @@ const upload = multer({
   }
 });
 
-// POST /api/testimonials/upload-avatar — Public avatar upload
-router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
+// POST /api/testimonials/upload-avatar — Public avatar upload (Rate limited)
+router.post('/upload-avatar', [leadLimiter, upload.single('avatar')], async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -51,8 +53,8 @@ router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
   }
 });
 
-// POST /api/testimonials — Public submit
-router.post('/', async (req, res) => {
+// POST /api/testimonials — Public submit (Rate limited + Honeypot)
+router.post('/', [leadLimiter, honeypotCheck], async (req, res) => {
   try {
     const { name, rating, text, source, avatarUrl } = req.body;
     if (!name || !rating || !text) {
@@ -140,8 +142,8 @@ router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/testimonials/:id
-router.delete('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
+// DELETE /api/testimonials/:id — Restricted to Super Admin (M6)
+router.delete('/:id', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const doc = await Testimonial.findById(req.params.id);
     if (!doc) return res.status(404).json({ success: false, message: 'Not found' });
