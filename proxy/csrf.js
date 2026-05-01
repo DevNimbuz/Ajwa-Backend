@@ -54,6 +54,7 @@ function csrfProtection(req, res, next) {
 
   // Authenticated state-changing request: enforce CSRF
   if (!cookieToken || !headerToken) {
+    console.warn(`[CSRF] Missing token at ${req.path}. Cookie: ${!!cookieToken}, Header: ${!!headerToken}`);
     return res.status(403).json({
       success: false,
       message: 'CSRF token missing. Please refresh the page and try again.',

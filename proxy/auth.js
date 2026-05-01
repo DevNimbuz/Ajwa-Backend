@@ -30,6 +30,10 @@ const requireAuth = async (req, res, next) => {
       token = req.cookies.token;
     }
 
+    if (!token && req.cookies) {
+      console.log(`[Auth] No token cookie found. Received cookies: ${Object.keys(req.cookies).join(', ') || 'none'}`);
+    }
+
     if (!token) {
       // HIGH-4 FIX: Log to console only — AuditLog.create here causes DB write amplification under attack
       console.warn(`[Auth] Unauthorized access attempt: ${req.originalUrl} from ${getClientIP(req)}`);

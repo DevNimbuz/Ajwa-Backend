@@ -73,10 +73,13 @@ router.post('/login', [
     const userAgent = req.headers['user-agent'] || 'unknown';
     const device = detectDevice(userAgent);
 
+    console.log(`[Auth] Login attempt for: ${email} from IP: ${clientIP} (${device})`);
+    
     // Find user by email
     const user = await User.findOne({ email }).select('+password');
 
     if (!user) {
+      console.warn(`[Auth] Login failed: User not found (${email})`);
       // Log generic failure to avoid account enumeration if possible, 
       // but here we already have the email so we log it
       await AuditLog.create({
@@ -109,6 +112,7 @@ router.post('/login', [
     const isMatch = await user.comparePassword(password);
     
     if (!isMatch) {
+      console.warn(`[Auth] Login failed: Incorrect password for ${email}`);
       // Brute force protection: Increment failures
       user.failedLoginAttempts += 1;
       let message = 'Invalid email or password';
@@ -140,6 +144,7 @@ router.post('/login', [
     await user.save();
 
     // Capture successful login
+    console.log(`[Auth] Login success: ${user.email} (${user.role})`);
     await AuditLog.create({
       action: 'LOGIN_SUCCESS',
       user: user._id,
@@ -259,6 +264,8 @@ router.post('/verify-otp', [
     if (!user || !user.pendingRegistration) {
       return res.status(400).json({ success: false, message: 'Registration session not found or already completed.' });
     }
+
+
 
     if (new Date() > user.pendingRegistration.expiresAt) {
       return res.status(400).json({ success: false, message: 'Session expired. Please register again.' });
