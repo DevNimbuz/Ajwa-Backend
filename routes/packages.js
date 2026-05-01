@@ -15,8 +15,8 @@ const express = require('express');
 const router = express.Router();
 const Package = require('../models/Package');
 const AuditLog = require('../models/AuditLog');
-const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../middleware/auth');
-const { getClientIP, detectDevice } = require('../middleware/security');
+const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../proxy/auth');
+const { getClientIP, detectDevice } = require('../proxy/security');
 const { cacheMiddleware, clearCache } = require('../utils/cache');
 
 // ══════════════════════════════════════════════

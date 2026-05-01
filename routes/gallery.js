@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const Gallery = require('../models/Gallery');
-const { requireAuth, requireAnyAdmin, requireSuperAdmin } = require('../middleware/auth');
+const { requireAuth, requireAnyAdmin, requireSuperAdmin } = require('../proxy/auth');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
-const { validateFile, sanitizeFilename } = require('../middleware/uploadValidator');
+const { validateFile, sanitizeFilename } = require('../proxy/uploadValidator');
 
 // ── Cloudinary config (uses env vars) ──
 cloudinary.config({

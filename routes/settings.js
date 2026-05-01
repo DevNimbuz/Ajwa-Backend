@@ -11,8 +11,8 @@ const express = require('express');
 const router = express.Router();
 const Setting = require('../models/Setting');
 const AuditLog = require('../models/AuditLog');
-const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
-const { getClientIP, detectDevice } = require('../middleware/security');
+const { requireAuth, requireSuperAdmin } = require('../proxy/auth');
+const { getClientIP, detectDevice } = require('../proxy/security');
 
 // ══════════════════════════════════════════════
 // GET /api/settings/public — Public settings (contact info, etc.)

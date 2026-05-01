@@ -19,9 +19,9 @@ const cookieParser = require('cookie-parser');
 const mongoSanitize = require('express-mongo-sanitize');
 const mongoose = require('mongoose');
 const connectDB = require('./config/db');
-const { globalLimiter } = require('./middleware/rateLimiter');
-const { sanitizeBody } = require('./middleware/security');
-const { csrfProtection } = require('./middleware/csrf');
+const { globalLimiter } = require('./proxy/rateLimiter');
+const { sanitizeBody } = require('./proxy/security');
+const { csrfProtection } = require('./proxy/csrf');
 
 // ── Initialize Express ──
 const app = express();

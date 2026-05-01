@@ -14,9 +14,9 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
-const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
-const { loginLimiter } = require('../middleware/rateLimiter');
-const { getClientIP, detectDevice } = require('../middleware/security');
+const { requireAuth, requireSuperAdmin } = require('../proxy/auth');
+const { loginLimiter } = require('../proxy/rateLimiter');
+const { getClientIP, detectDevice } = require('../proxy/security');
 const { sendOTPEmail, sendPasswordResetEmail } = require('../utils/email');
 
 /**

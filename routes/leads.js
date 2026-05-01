@@ -17,10 +17,10 @@ const Package = require('../models/Package');
 const AuditLog = require('../models/AuditLog');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../middleware/auth');
-const { getClientIP, detectDevice } = require('../middleware/security');
-const { leadLimiter } = require('../middleware/rateLimiter');
-const { honeypotCheck } = require('../middleware/security');
+const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../proxy/auth');
+const { getClientIP, detectDevice } = require('../proxy/security');
+const { leadLimiter } = require('../proxy/rateLimiter');
+const { honeypotCheck } = require('../proxy/security');
 const { sendLeadNotification } = require('../utils/email');
 
 // ── Notification broadcaster (lazy load to avoid circular) ──

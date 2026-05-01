@@ -7,7 +7,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { requireAuth, requireAnyAdmin } = require('../middleware/auth');
+const { requireAuth, requireAnyAdmin } = require('../proxy/auth');
 
 // ── Connected SSE clients ──
 const clients = new Set();

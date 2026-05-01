@@ -9,9 +9,9 @@
 const express = require('express');
 const router = express.Router();
 const Visitor = require('../models/Visitor');
-const { requireAuth, requireAnyAdmin } = require('../middleware/auth');
-const { visitorLimiter } = require('../middleware/rateLimiter');
-const { hashIP, getClientIP, detectDevice } = require('../middleware/security');
+const { requireAuth, requireAnyAdmin } = require('../proxy/auth');
+const { visitorLimiter } = require('../proxy/rateLimiter');
+const { hashIP, getClientIP, detectDevice } = require('../proxy/security');
 
 // ══════════════════════════════════════════════
 // POST /api/visitors — Track page view (PUBLIC)

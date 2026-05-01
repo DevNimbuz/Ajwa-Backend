@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const Testimonial = require('../models/Testimonial');
-const { requireAuth, requireAnyAdmin, requireSuperAdmin } = require('../middleware/auth');
+const { requireAuth, requireAnyAdmin, requireSuperAdmin } = require('../proxy/auth');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
-const { validateFile, sanitizeFilename } = require('../middleware/uploadValidator');
-const { leadLimiter } = require('../middleware/rateLimiter');
-const { honeypotCheck } = require('../middleware/security');
+const { validateFile, sanitizeFilename } = require('../proxy/uploadValidator');
+const { leadLimiter } = require('../proxy/rateLimiter');
+const { honeypotCheck } = require('../proxy/security');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,

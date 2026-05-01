@@ -15,8 +15,8 @@ const router = express.Router();
 const User = require('../models/User');
 const Lead = require('../models/Lead');
 const AuditLog = require('../models/AuditLog');
-const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../middleware/auth');
-const { getClientIP, detectDevice } = require('../middleware/security');
+const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../proxy/auth');
+const { getClientIP, detectDevice } = require('../proxy/security');
 
 // All routes require authentication
 router.use(requireAuth);
