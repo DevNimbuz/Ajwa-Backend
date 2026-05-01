@@ -134,35 +134,6 @@ async function sendOTPEmail({ email, name, otp, type }) {
   }
 }
 
-/**
- * Sends OTP via SMS using Twilio
- * @param {Object} data - { phone, name, otp }
- */
-async function sendOTPSMS({ phone, name, otp }) {
-  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER } = process.env;
-
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
-    console.log(`[SMS] OTP for ${phone}: ${otp}`);
-    return { success: true, method: 'console' };
-  }
-
-  try {
-    const twilio = require('twilio');
-    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-
-    const message = await client.messages.create({
-      body: `FlyAjwa: Your verification code is ${otp}. Valid for 10 minutes. Do not share this code with anyone.`,
-      from: TWILIO_PHONE_NUMBER,
-      to: phone,
-    });
-
-    console.log(`[SMS] OTP sent to ${phone}, SID: ${message.sid}`);
-    return { success: true, method: 'sms', sid: message.sid };
-  } catch (error) {
-    console.error('[SMS] OTP failed:', error.message);
-    return { success: false, error: error.message };
-  }
-}
 
 /**
  * Sends Password Reset email
@@ -208,4 +179,4 @@ async function sendPasswordResetEmail({ email, name, resetUrl }) {
   }
 }
 
-module.exports = { sendLeadNotification, sendOTPEmail, sendOTPSMS, sendPasswordResetEmail };
+module.exports = { sendLeadNotification, sendOTPEmail, sendPasswordResetEmail };

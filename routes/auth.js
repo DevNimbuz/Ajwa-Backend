@@ -214,10 +214,9 @@ router.post('/send-otp', [
 
     res.json({
       success: true,
-      message: 'Verification codes sent to your email and phone',
+      message: 'Verification code sent to your email',
       verifyToken: pendingUser._id.toString(),
       emailMasked: email.replace(/(.{2}).*(@.*)/, '$1***$2'),
-      phoneMasked: phone.replace(/(\+\d{2})\d+(\d{4})$/, '$1****$2'),
       expiresIn: 600,
     });
   } catch (error) {
@@ -229,10 +228,7 @@ router.post('/send-otp', [
 // ══════════════════════════════════════════════
 // POST /api/auth/verify-otp — Complete registration
 // ══════════════════════════════════════════════
-router.post('/verify-otp', [
-  body('verifyToken').notEmpty().withMessage('Verification token is required'),
-  body('emailOTP').optional().isLength({ min: 6, max: 6 }).withMessage('Email OTP must be 6 digits'),
-  body('phoneOTP').optional().isLength({ min: 6, max: 6 }).withMessage('Phone OTP must be 6 digits'),
+  body('emailOTP').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -240,7 +236,7 @@ router.post('/verify-otp', [
       return res.status(400).json({ success: false, message: errors.array()[0].msg });
     }
 
-    const { verifyToken, emailOTP, phoneOTP } = req.body;
+    const { verifyToken, emailOTP } = req.body;
 
     if (!verifyToken) {
       return res.status(400).json({ success: false, message: 'Invalid request: No session token.' });
@@ -278,7 +274,6 @@ router.post('/verify-otp', [
     user.role = 'CUSTOMER';
     user.isVerified = true;
     user.isEmailVerified = true;
-    user.isPhoneVerified = true; // Auto-verify phone as we are skipping official check
     user.pendingRegistration = undefined;
     user.emailOTP = undefined;
     
@@ -306,30 +301,21 @@ router.post('/verify-otp', [
 // ══════════════════════════════════════════════
 router.post('/resend-otp', [
   body('verifyToken').notEmpty().withMessage('Verification token is required'),
-  body('type').isIn(['email', 'phone', 'both']).withMessage('Invalid type'),
 ], async (req, res) => {
   try {
-    const { verifyToken, type } = req.body;
-    const user = await User.findById(verifyToken).select('+emailOTP.code +phoneOTP.code +pendingRegistration');
+    const { verifyToken } = req.body;
+    const user = await User.findById(verifyToken).select('+emailOTP.code +pendingRegistration');
 
     if (!user || !user.pendingRegistration) {
       return res.status(400).json({ success: false, message: 'Invalid session' });
     }
 
     const crypto = require('crypto');
-    if (type === 'email' || type === 'both') {
-      const newCode = crypto.randomInt(100000, 999999).toString();
-      user.emailOTP = { code: newCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000), attempts: 0 };
-      sendOTPEmail({ email: user.pendingRegistration.email, name: user.pendingRegistration.name, otp: newCode, type: 'email' })
-        .catch(() => {});
-      console.log(`[OTP] Resent Email: ${newCode}`);
-    }
-
-    if (type === 'phone' || type === 'both') {
-      const newCode = crypto.randomInt(100000, 999999).toString();
-      user.phoneOTP = { code: newCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000), attempts: 0 };
-      // Simulating SMS for now — No console.log in production (C3)
-    }
+    const newCode = crypto.randomInt(100000, 999999).toString();
+    user.emailOTP = { code: newCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000), attempts: 0 };
+    
+    sendOTPEmail({ email: user.pendingRegistration.email, name: user.pendingRegistration.name, otp: newCode, type: 'email' })
+      .catch(() => {});
 
     await user.save();
     res.json({ success: true, message: 'OTP resent successfully' });
