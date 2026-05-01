@@ -73,8 +73,6 @@ router.post('/login', [
     const userAgent = req.headers['user-agent'] || 'unknown';
     const device = detectDevice(userAgent);
 
-    console.log(`[Auth] Login attempt for: ${email} from IP: ${clientIP} (${device})`);
-    
     // Find user by email
     const user = await User.findOne({ email }).select('+password');
 
@@ -112,7 +110,6 @@ router.post('/login', [
     const isMatch = await user.comparePassword(password);
     
     if (!isMatch) {
-      console.warn(`[Auth] Login failed: Incorrect password for ${email}`);
       // Brute force protection: Increment failures
       user.failedLoginAttempts += 1;
       let message = 'Invalid email or password';
@@ -144,7 +141,6 @@ router.post('/login', [
     await user.save();
 
     // Capture successful login
-    console.log(`[Auth] Login success: ${user.email} (${user.role})`);
     await AuditLog.create({
       action: 'LOGIN_SUCCESS',
       user: user._id,
