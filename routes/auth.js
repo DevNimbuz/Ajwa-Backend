@@ -228,6 +228,8 @@ router.post('/send-otp', [
 // ══════════════════════════════════════════════
 // POST /api/auth/verify-otp — Complete registration
 // ══════════════════════════════════════════════
+router.post('/verify-otp', [
+  body('verifyToken').notEmpty().withMessage('Verification token is required'),
   body('emailOTP').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
 ], async (req, res) => {
   try {

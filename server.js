@@ -181,11 +181,7 @@ async function startServer() {
   await connectDB();
   
   app.listen(PORT, () => {
-    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`  🚀 FlyAjwa API running on port ${PORT}`);
-    console.log(`  📍 http://localhost:${PORT}/api/health`);
-    console.log(`  🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+    console.log(`🚀 FlyAjwa API: http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
   });
 }
 

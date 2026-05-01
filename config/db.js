@@ -14,7 +14,7 @@ const connectDB = async () => {
       // Mongoose 8 defaults are good — no need for useNewUrlParser etc.
     });
 
-    console.log(`✅ MongoDB connected: ${conn.connection.host}`);
+    console.log(`✅ Connected to Database`);
   } catch (error) {
     console.error(`❌ MongoDB connection error: ${error.message}`);
     process.exit(1);
