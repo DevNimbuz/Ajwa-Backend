@@ -37,6 +37,7 @@ function csrfProtection(req, res, next) {
         sameSite: isProd ? 'None' : 'Lax',
         maxAge: 24 * 60 * 60 * 1000,
       });
+      res.setHeader('X-CSRF-Token', token);
     }
     return next();
   }
@@ -78,6 +79,7 @@ function csrfProtection(req, res, next) {
     sameSite: isProd ? 'None' : 'Lax',
     maxAge: 24 * 60 * 60 * 1000,
   });
+  res.setHeader('X-CSRF-Token', newToken);
 
   next();
 }

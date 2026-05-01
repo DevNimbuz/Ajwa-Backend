@@ -27,10 +27,20 @@ const setTokenCookie = (res, token) => {
   res.cookie('token', token, {
     httpOnly: true,
     secure: isProd,                      // HTTPS only in production
-    sameSite: isProd ? 'None' : 'Lax',  // None = cross-domain (Vercel → Render)
-    maxAge: 24 * 60 * 60 * 1000,        // 24 hours (match JWT expiry)
+    sameSite: isProd ? 'None' : 'Lax',  // None = cross-domain (Vercel -> Render)
+    maxAge: 24 * 60 * 60 * 1000,
   });
 };
+
+// ══════════════════════════════════════════════
+// GET /api/auth/csrf — Fetch CSRF Token
+// ══════════════════════════════════════════════
+router.get('/csrf', (req, res) => {
+  // The global CSRF middleware handles setting the _csrf cookie and X-CSRF-Token header.
+  // We just return a success response so the frontend can capture the header.
+  res.json({ success: true });
+});
+
 
 const clearTokenCookie = (res) => {
   const isProd = process.env.NODE_ENV === 'production';
