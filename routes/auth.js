@@ -161,8 +161,8 @@ router.post('/login', [
 
     res.json({
       success: true,
+      token, // Restore token for cross-domain compatibility (Vercel -> Render)
       user: user.toSafeJSON(),
-      // Removed token from body for H5 security (Cookie-Only Auth)
     });
   } catch (error) {
     console.error('[Auth] Login error:', error.message);
@@ -306,8 +306,8 @@ router.post('/verify-otp', [
     return res.status(201).json({
       success: true,
       message: 'Account verified successfully',
+      token, // Restore token for cross-domain compatibility
       user: user.toSafeJSON(),
-      // Removed token from body for H5 security
     });
   } catch (error) {
     console.error('[Auth] Verify OTP error:', error.message);
