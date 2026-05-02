@@ -21,7 +21,7 @@ const { getClientIP, detectDevice } = require('../proxy/security');
 // All routes require authentication
 router.use(requireAuth);
 
-const TEAM_ROLES = ['SUPER_ADMIN', 'TEAM'];
+const TEAM_ROLES = ['SUPER_ADMIN', 'ADMIN', 'TEAM'];
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
 // ══════════════════════════════════════════════
@@ -34,7 +34,7 @@ router.get('/', requireAnyAdmin, async (req, res) => {
     const selectFields = isSuperAdmin
       ? '-password -resetPasswordToken -resetPasswordExpire'
       : 'name email role isActive createdAt';
-    const users = await User.find({ role: { $in: ['SUPER_ADMIN', 'TEAM'] } }).select(selectFields).sort({ createdAt: -1 });
+    const users = await User.find({ role: { $in: ['SUPER_ADMIN', 'ADMIN', 'TEAM'] } }).select(selectFields).sort({ createdAt: -1 });
     res.json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
