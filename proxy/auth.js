@@ -25,6 +25,10 @@ const requireAuth = async (req, res, next) => {
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
+    // Check query string fallback (critical for SSE/EventSource)
+    else if (req.query && req.query.token) {
+      token = req.query.token;
+    }
     // Check cookie fallback
     else if (req.cookies && req.cookies.token) {
       token = req.cookies.token;

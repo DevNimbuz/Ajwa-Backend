@@ -513,10 +513,9 @@ router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
   }
 });
 
+// DELETE /api/leads/:id — Delete lead (ANY ADMIN)
 // ══════════════════════════════════════════════
-// DELETE /api/leads/:id — Delete lead (SUPER ADMIN)
-// ══════════════════════════════════════════════
-router.delete('/:id', requireAuth, requireSuperAdmin, async (req, res) => {
+router.delete('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const lead = await Lead.findByIdAndDelete(req.params.id);
     if (!lead) {
