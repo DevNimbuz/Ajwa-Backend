@@ -152,9 +152,9 @@ router.get('/:slug/pricing', async (req, res) => {
 });
 
 // ══════════════════════════════════════════════
-// POST /api/packages — Create package (SUPER ADMIN)
+// POST /api/packages — Create package (ADMIN)
 // ══════════════════════════════════════════════
-router.post('/', requireAuth, requireSuperAdmin, async (req, res) => {
+router.post('/', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const allowedFields = [
       'slug', 'name', 'title', 'description', 'tagline', 'heroImg', 
@@ -192,9 +192,9 @@ router.post('/', requireAuth, requireSuperAdmin, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════
-// PUT /api/packages/:id — Update package (SUPER ADMIN)
+// PUT /api/packages/:id — Update package (ADMIN)
 // ══════════════════════════════════════════════
-router.put('/:id', requireAuth, requireSuperAdmin, async (req, res) => {
+router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
     const allowedFields = [
       'slug', 'name', 'title', 'description', 'tagline', 'heroImg', 

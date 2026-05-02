@@ -115,6 +115,13 @@ const LeadSchema = new mongoose.Schema({
   referrer: String,
   // ── Selected Package Options (for dynamic pricing leads) ──
   selectedGroupSize: Number,
+  adults: Number,
+  children: Number,
+  infants: Number,
+  selectedDays: Number,
+  selectedFlight: Boolean,
+  selectedHotelStar: Number,
+  selectedRoomType: String,
   quotedPrice: Number,
   // ── Direct Booking Details ──
   bookingType: {
@@ -142,6 +149,37 @@ const LeadSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // ── Invoice & Financials ──
+  invoice: {
+    invoiceId: String,
+    items: [{
+      description: String,
+      amount: Number
+    }],
+    subtotal: Number,
+    discount: Number,
+    pointsRedeemed: Number,
+    total: Number,
+    status: {
+      type: String,
+      enum: ['DRAFT', 'SENT', 'PAID', 'CANCELLED'],
+      default: 'DRAFT'
+    },
+    generatedAt: Date,
+    updatedAt: Date,
+  },
+  // ── Payment Verification ──
+  paymentProof: {
+    screenshot: String, // Cloudinary URL
+    status: {
+      type: String,
+      enum: ['NONE', 'PENDING', 'VERIFIED', 'REJECTED'],
+      default: 'NONE'
+    },
+    uploadedAt: Date,
+    verifiedAt: Date,
+    notes: String
+  }
 }, {
   timestamps: true,
 });

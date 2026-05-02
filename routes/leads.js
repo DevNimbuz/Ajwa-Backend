@@ -165,6 +165,7 @@ router.post('/', [
       serviceType,
       serviceDetails,
       selectedDays, selectedFlight, selectedHotelStar, selectedGroupSize, quotedPrice,
+      adults, children, infants, selectedRoomType,
       utmSource, utmMedium, utmCampaign, referrer,
       bookingType: bookingType || 'INQUIRY',
       travelDate,
@@ -409,10 +410,12 @@ router.get('/export', requireAuth, requireAnyAdmin, async (req, res) => {
       return `"${str.replace(/"/g, '""')}"`;
     };
 
-    const headers = 'Name,Email,Phone,Destination,Source,Status,Priority,Assigned To,Message,Created At\n';
-    const rows = leads.map(l =>
-      `${escapeCSV(l.name)},${escapeCSV(l.email)},${escapeCSV(l.phone)},${escapeCSV(l.destination)},${escapeCSV(l.source)},${escapeCSV(l.status)},${escapeCSV(l.priority)},${escapeCSV(l.assignedTo?.name || 'Unassigned')},${escapeCSV(l.message)},"${l.createdAt.toISOString()}"`
-    ).join('\n');
+    const headers = 'Name,Email,Phone,Destination,Travel Date,Travelers,Days,Flight Req,Hotel Star,Value (INR),Source,Status,Priority,Assigned To,Booking Type,Message,Internal Notes,Created At\n';
+    const rows = leads.map(l => {
+      const notesStr = (l.notes || []).map(n => `[${n.by} @ ${new Date(n.at).toLocaleDateString()}]: ${n.text}`).join(' | ');
+      const travelDateStr = l.travelDate ? new Date(l.travelDate).toLocaleDateString() : 'TBD';
+      return `${escapeCSV(l.name)},${escapeCSV(l.email)},${escapeCSV(l.phone)},${escapeCSV(l.destination)},${escapeCSV(travelDateStr)},${escapeCSV(l.selectedGroupSize || 0)},${escapeCSV(l.selectedDays || 0)},${escapeCSV(l.selectedFlight ? 'YES' : 'NO')},${escapeCSV(l.selectedHotelStar || 0)},${escapeCSV(l.quotedPrice || 0)},${escapeCSV(l.source)},${escapeCSV(l.status)},${escapeCSV(l.priority)},${escapeCSV(l.assignedTo?.name || 'Unassigned')},${escapeCSV(l.bookingType)},${escapeCSV(l.message)},${escapeCSV(notesStr)},"${l.createdAt.toISOString()}"`;
+    }).join('\n');
 
     await AuditLog.create({
       action: 'LEAD_EXPORT',
@@ -534,6 +537,188 @@ router.delete('/:id', requireAuth, requireSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Lead deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// POST /api/leads/:id/invoice — Generate/Update invoice (STAFF)
+// ══════════════════════════════════════════════
+router.post('/:id/invoice', requireAuth, requireAnyAdmin, async (req, res) => {
+  try {
+    const { items, discount = 0 } = req.body;
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+    const subtotal = items.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+    const numDiscount = Number(discount) || 0;
+    const pointsRedeemed = Number(lead.invoice?.pointsRedeemed) || 0;
+    const total = subtotal - numDiscount - pointsRedeemed;
+
+    lead.invoice = {
+      invoiceId: lead.invoice?.invoiceId || `INV-${Date.now().toString().slice(-6)}`,
+      items,
+      subtotal,
+      discount: numDiscount,
+      pointsRedeemed,
+      total,
+      status: 'SENT',
+      generatedAt: lead.invoice?.generatedAt || new Date(),
+      updatedAt: new Date(),
+    };
+
+    await lead.save();
+    res.json({ success: true, data: lead });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════
+// POST /api/leads/:id/redeem — Redeem points on invoice (CUSTOMER)
+// ══════════════════════════════════════════════
+router.post('/:id/redeem', requireAuth, async (req, res) => {
+  try {
+    const { points } = req.body;
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+    
+    if (!lead.invoice) return res.status(400).json({ success: false, message: 'No invoice found for this booking' });
+
+    // Ensure the points belong to the customer of this lead
+    const user = await User.findById(req.user._id);
+    if (user.ajwaPoints < points) {
+      return res.status(400).json({ success: false, message: 'Insufficient Ajwa Points' });
+    }
+
+    const numPoints = Number(points) || 0;
+    const subtotal = Number(lead.invoice.subtotal) || 0;
+    const discount = Number(lead.invoice.discount) || 0;
+
+    // 1 Point = ₹1
+    lead.invoice.pointsRedeemed = numPoints;
+    lead.invoice.total = Math.max(0, subtotal - discount - numPoints); // Prevent negative totals
+    lead.invoice.status = 'DRAFT'; // Set back to draft so staff can regenerate/finalize if needed
+    lead.invoice.updatedAt = new Date();
+
+    await lead.save();
+
+    res.json({ success: true, message: 'Points applied to invoice', data: lead });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════
+// POST /api/leads/:id/pay — Upload payment proof (CUSTOMER)
+// ══════════════════════════════════════════════
+router.post('/:id/pay', requireAuth, async (req, res) => {
+  try {
+    const { screenshot } = req.body;
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+    lead.paymentProof = {
+      screenshot,
+      status: 'PENDING',
+      uploadedAt: new Date()
+    };
+    
+    // Update lead status to PROCESSING or PAYMENT_SUBMITTED
+    lead.status = 'PROCESSING';
+
+    await lead.save();
+    res.json({ success: true, message: 'Payment proof submitted', data: lead });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════
+// POST /api/leads/:id/verify-payment — Verify payment (STAFF)
+// ══════════════════════════════════════════════
+router.post('/:id/verify-payment', requireAuth, requireAnyAdmin, async (req, res) => {
+  try {
+    const { verified, notes } = req.body;
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+    if (verified) {
+      lead.paymentProof.status = 'VERIFIED';
+      lead.paymentProof.verifiedAt = new Date();
+      lead.status = 'PAYMENT_ACCEPTED';
+      if (lead.invoice) lead.invoice.status = 'PAID';
+      
+      // Deduct redeemed points from user if any
+      if (lead.invoice?.pointsRedeemed > 0 && lead.customer) {
+        const user = await User.findById(lead.customer);
+        if (user) {
+          user.ajwaPoints -= lead.invoice.pointsRedeemed;
+          await user.save();
+          
+          await AuditLog.create({
+            action: 'LOYALTY_REDEMPTION',
+            user: lead.customer,
+            email: user.email,
+            ip: getClientIP(req),
+            userAgent: req.headers['user-agent'] || 'unknown',
+            category: 'SYSTEM',
+            reason: `Redeemed ${lead.invoice.pointsRedeemed} points for Invoice ${lead.invoice.invoiceId}`,
+            metadata: { leadId: lead._id, points: lead.invoice.pointsRedeemed }
+          });
+        }
+      }
+    } else {
+      lead.paymentProof.status = 'REJECTED';
+      lead.paymentProof.notes = notes;
+      lead.status = 'QUOTED'; // Move back to quoted
+    }
+
+    await lead.save();
+    res.json({ success: true, data: lead });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════
+// POST /api/leads/:id/credit-points — Manual point adjustment (STAFF)
+// ══════════════════════════════════════════════
+router.post('/:id/credit-points', requireAuth, requireAnyAdmin, async (req, res) => {
+  try {
+    const { points, reason } = req.body;
+    const lead = await Lead.findById(req.params.id);
+    if (!lead || !lead.customer) {
+      return res.status(400).json({ success: false, message: 'Lead must be linked to a registered customer' });
+    }
+
+    const user = await User.findById(lead.customer);
+    if (!user) return res.status(404).json({ success: false, message: 'Customer not found' });
+
+    user.ajwaPoints += Number(points);
+    await user.save();
+
+    await AuditLog.create({
+      action: 'LOYALTY_ADJUSTMENT',
+      user: req.user._id,
+      email: req.user.email,
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || 'unknown',
+      category: 'SYSTEM',
+      reason: `Manual Point Credit: ${points} points to ${user.name} (${reason})`,
+      metadata: { leadId: lead._id, customerId: user._id, points, reason }
+    });
+
+    // Add a note to the lead as well
+    lead.notes.push({
+      by: req.user.name,
+      text: `Awarded ${points} Ajwa Points manually. Reason: ${reason}`,
+      at: new Date()
+    });
+    await lead.save();
+
+    res.json({ success: true, message: `Successfully awarded ${points} points`, data: { balance: user.ajwaPoints } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
