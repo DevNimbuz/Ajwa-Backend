@@ -22,6 +22,8 @@ const { getClientIP, detectDevice } = require('../proxy/security');
 const { leadLimiter } = require('../proxy/rateLimiter');
 const { honeypotCheck } = require('../proxy/security');
 const { sendLeadNotification } = require('../utils/email');
+const { calculatePriorityScore, autoAssignLead } = require('../utils/bookingEngine');
+const { calculatePoints } = require('../utils/loyaltyEngine');
 
 // ── Notification broadcaster (lazy load to avoid circular) ──
 let notificationRouter;
@@ -107,19 +109,15 @@ router.post('/', [
       selectedDays, selectedFlight, selectedHotelStar, selectedGroupSize, quotedPrice,
       utmSource, utmMedium, utmCampaign, referrer } = req.body;
 
-    // Validate required fields
     if (!name || !phone) {
       return res.status(400).json({ success: false, message: 'Name and phone are required' });
     }
 
-    // Phone validation (basic)
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    if (cleanPhone.length < 10) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid phone number' });
-    }
+    const { bookingType, travelDate, travelerDetails } = req.body;
 
-    // Bind to customer if logged in
+    // Direct Bookings REQUIRE an account (and therefore points)
     let customerId = null;
+    let decodedUser = null;
     try {
       const authHeader = req.headers.authorization;
       const token = authHeader?.startsWith('Bearer ')
@@ -128,18 +126,33 @@ router.post('/', [
 
       if (token) {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.id);
-        if (user && user.role === 'CUSTOMER') {
-          customerId = user._id;
+        decodedUser = await User.findById(decoded.id);
+        if (decodedUser && decodedUser.role === 'CUSTOMER') {
+          customerId = decodedUser._id;
         }
       }
     } catch (e) {
-      // Not logged in or invalid token - continue without customer link
+      // Not logged in or invalid token
     }
 
-    // Create the lead with Automatic Staff Assignment
-    const { getNextAvailableStaff } = require('../utils/assignment');
-    const assignedStaffId = await getNextAvailableStaff();
+    if (bookingType === 'DIRECT_BOOKING' && !customerId) {
+      return res.status(401).json({ success: false, message: 'Account required for direct booking' });
+    }
+    const cleanPhone = phone.replace(/[^0-9+]/g, '');
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid phone number' });
+    }
+
+    // Logic handled above
+
+    // ── Priority & Assignment Engine ──
+    const priorityScore = calculatePriorityScore(req.body);
+    const assignedStaffId = await autoAssignLead(priorityScore);
+
+    let calculatedPriority = 'LOW';
+    if (priorityScore >= 80) calculatedPriority = 'URGENT';
+    else if (priorityScore >= 60) calculatedPriority = 'HIGH';
+    else if (priorityScore >= 30) calculatedPriority = 'NORMAL';
 
     const leadData = {
       name: name.trim(),
@@ -153,7 +166,13 @@ router.post('/', [
       serviceDetails,
       selectedDays, selectedFlight, selectedHotelStar, selectedGroupSize, quotedPrice,
       utmSource, utmMedium, utmCampaign, referrer,
-      assignedTo: assignedStaffId, // Round-Robin Assignment
+      bookingType: bookingType || 'INQUIRY',
+      travelDate,
+      travelerDetails,
+      priorityScore,
+      priority: calculatedPriority,
+      assignedTo: assignedStaffId,
+      ajwaPointsPending: bookingType === 'DIRECT_BOOKING' ? 500 : 0, // Reward for direct booking
     };
 
     if (customerId) {
@@ -420,7 +439,7 @@ router.get('/export', requireAuth, requireAnyAdmin, async (req, res) => {
 // ══════════════════════════════════════════════
 router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
   try {
-    const { status, priority, assignedTo, note } = req.body;
+    const { status, priority, assignedTo, note, quotedPrice } = req.body;
     if (req.user.role === 'TEAM' && assignedTo !== undefined) {
       return res.status(403).json({ success: false, message: 'Only super admins can reassign leads' });
     }
@@ -437,6 +456,7 @@ router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
     if (status) lead.status = status;
     if (priority) lead.priority = priority;
     if (assignedTo !== undefined) lead.assignedTo = assignedTo || null;
+    if (quotedPrice !== undefined) lead.quotedPrice = quotedPrice;
 
     if (note) {
       lead.notes.push({
@@ -444,6 +464,29 @@ router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
         text: note,
         at: new Date(),
       });
+    }
+
+    // ── Loyalty Points Trigger ──
+    // Award points when status is PAYMENT_ACCEPTED or BOOKED
+    if (['PAYMENT_ACCEPTED', 'BOOKED'].includes(lead.status) && lead.customer && !lead.ajwaPointsAwarded) {
+      try {
+        const customer = await User.findById(lead.customer);
+        if (customer) {
+          const pointsToAward = await calculatePoints(customer, lead);
+          customer.ajwaPoints += pointsToAward;
+          await customer.save();
+          lead.ajwaPointsAwarded = true;
+          
+          // Optionally add a system note
+          lead.notes.push({
+            by: 'SYSTEM',
+            text: `Loyalty Points Awarded: ${pointsToAward} Ajwa Points credited to customer account.`,
+            at: new Date(),
+          });
+        }
+      } catch (e) {
+        console.error('[Loyalty] Point award error:', e.message);
+      }
     }
 
     await lead.save();
@@ -458,7 +501,7 @@ router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
       device: detectDevice(req.headers['user-agent']),
       category: 'SYSTEM',
       reason: `Updated lead status/details for: "${lead.name}"`,
-      metadata: { leadId: lead._id, updates: { status, priority, assignedTo } }
+      metadata: { leadId: lead._id, updates: { status, priority, assignedTo, quotedPrice } }
     });
 
     res.json({ success: true, data: lead });

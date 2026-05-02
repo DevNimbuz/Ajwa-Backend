@@ -32,10 +32,12 @@ const PackageVariantSchema = new mongoose.Schema({
 
 // ── Itinerary Day Sub-Schema ──
 const ItineraryDaySchema = new mongoose.Schema({
-  day: { type: String, required: true },          // "Day 01"
+  day: { type: String, required: false },          // "Day 01"
   title: { type: String, required: true },        // "Arrival & City Tour"
-  desc: { type: String, required: true },         // Full description
-  activities: [String],                            // List of activities
+  description: { type: String, required: false },  // Full description (Frontend name)
+  desc: { type: String, required: false },         // Full description (Legacy name)
+  highlights: [String],                            // List of highlights (Frontend name)
+  activities: [String],                            // List of activities (Legacy name)
   optional: { type: Boolean, default: false },     // Optional activities flag
 }, { _id: false });
 

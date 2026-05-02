@@ -69,7 +69,7 @@ const LeadSchema = new mongoose.Schema({
   // ── Status Funnel ──
   status: {
     type: String,
-    enum: ['NEW', 'CONTACTED', 'INTERESTED', 'QUOTED', 'BOOKED', 'LOST'],
+    enum: ['NEW', 'CONTACTED', 'INTERESTED', 'QUOTED', 'UNDER_REVIEW', 'PROCESSING', 'PAYMENT_ACCEPTED', 'BOOKED', 'LOST'],
     default: 'NEW',
     index: true,
   },
@@ -114,11 +114,34 @@ const LeadSchema = new mongoose.Schema({
   utmCampaign: String,
   referrer: String,
   // ── Selected Package Options (for dynamic pricing leads) ──
-  selectedDays: Number,
-  selectedFlight: Boolean,
-  selectedHotelStar: Number,
   selectedGroupSize: Number,
   quotedPrice: Number,
+  // ── Direct Booking Details ──
+  bookingType: {
+    type: String,
+    enum: ['INQUIRY', 'DIRECT_BOOKING'],
+    default: 'INQUIRY',
+  },
+  travelDate: {
+    type: Date,
+  },
+  travelerDetails: [{
+    age: Number,
+    type: String, // 'ADULT', 'CHILD', 'INFANT'
+  }],
+  priorityScore: {
+    type: Number,
+    default: 0,
+    index: true,
+  },
+  ajwaPointsPending: {
+    type: Number,
+    default: 0,
+  },
+  ajwaPointsAwarded: {
+    type: Boolean,
+    default: false,
+  },
 }, {
   timestamps: true,
 });
@@ -130,5 +153,7 @@ LeadSchema.index({ createdAt: -1 }); // Sort by newest
 LeadSchema.index({ status: 1, createdAt: -1 }); // Filter by status
 LeadSchema.index({ assignedTo: 1 }); // Filter by assignment
 LeadSchema.index({ source: 1 }); // Filter by source
+LeadSchema.index({ priorityScore: -1 }); // Priority queue
+LeadSchema.index({ bookingType: 1 }); // Filter by intent
 
 module.exports = mongoose.model('Lead', LeadSchema);

@@ -134,6 +134,19 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  // ── Loyalty & Performance ──
+  ajwaPoints: {
+    type: Number,
+    default: 0,
+    index: true,
+  },
+  performanceScore: {
+    type: Number,
+    default: 50, // Base score for staff, 0-100
+    min: 0,
+    max: 100,
+    index: true,
+  },
 }, {
   timestamps: true, // Adds createdAt, updatedAt
 });
@@ -189,6 +202,8 @@ UserSchema.methods.toSafeJSON = function () {
     profile: this.profile,
     wishlist: this.wishlist,
     documents: this.documents,
+    ajwaPoints: this.ajwaPoints,
+    performanceScore: this.performanceScore,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,
   };

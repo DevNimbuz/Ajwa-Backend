@@ -166,4 +166,28 @@ router.post('/bulk-delete', requireAuth, requireSuperAdmin, async (req, res) => 
   }
 });
 
+// ══════════════════════════════════════════════
+// POST /api/gallery/upload-system — Admin System Upload
+// ══════════════════════════════════════════════
+router.post('/upload-system', requireAuth, requireAnyAdmin, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image uploaded' });
+    }
+
+    const folder = req.body.folder || 'flyajwa/system';
+    const result = await uploadToCloudinary(req.file.buffer, folder);
+
+    res.status(201).json({
+      success: true,
+      url: result.secure_url,
+      cloudinaryId: result.public_id,
+      message: 'Image uploaded successfully to system storage.',
+    });
+  } catch (error) {
+    console.error('[System Upload Error]', error.message);
+    res.status(500).json({ success: false, message: 'Upload failed' });
+  }
+});
+
 module.exports = router;
