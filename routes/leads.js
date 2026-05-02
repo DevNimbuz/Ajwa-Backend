@@ -17,7 +17,7 @@ const Package = require('../models/Package');
 const AuditLog = require('../models/AuditLog');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../proxy/auth');
+const { requireAuth, requireSuperAdmin, requireAnyAdmin, requireFullAdmin } = require('../proxy/auth');
 const { getClientIP, detectDevice } = require('../proxy/security');
 const { leadLimiter } = require('../proxy/rateLimiter');
 const { honeypotCheck } = require('../proxy/security');
@@ -328,7 +328,7 @@ router.get('/', requireAuth, requireAnyAdmin, async (req, res) => {
 // ══════════════════════════════════════════════
 // GET /api/leads/analytics — Lead statistics (ADMIN)
 // ══════════════════════════════════════════════
-router.get('/analytics', requireAuth, requireAnyAdmin, async (req, res) => {
+router.get('/analytics', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -385,7 +385,7 @@ router.get('/analytics', requireAuth, requireAnyAdmin, async (req, res) => {
 // ══════════════════════════════════════════════
 // GET /api/leads/export — Export leads as CSV (ADMIN)
 // ══════════════════════════════════════════════
-router.get('/export', requireAuth, requireAnyAdmin, async (req, res) => {
+router.get('/export', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const { status, startDate, endDate } = req.query;
     const filter = {};
@@ -635,7 +635,7 @@ router.post('/:id/pay', requireAuth, async (req, res) => {
 // ══════════════════════════════════════════════
 // POST /api/leads/:id/verify-payment — Verify payment (STAFF)
 // ══════════════════════════════════════════════
-router.post('/:id/verify-payment', requireAuth, requireAnyAdmin, async (req, res) => {
+router.post('/:id/verify-payment', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const { verified, notes } = req.body;
     const lead = await Lead.findById(req.params.id);
@@ -682,7 +682,7 @@ router.post('/:id/verify-payment', requireAuth, requireAnyAdmin, async (req, res
 // ══════════════════════════════════════════════
 // POST /api/leads/:id/credit-points — Manual point adjustment (STAFF)
 // ══════════════════════════════════════════════
-router.post('/:id/credit-points', requireAuth, requireAnyAdmin, async (req, res) => {
+router.post('/:id/credit-points', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const { points, reason } = req.body;
     const lead = await Lead.findById(req.params.id);

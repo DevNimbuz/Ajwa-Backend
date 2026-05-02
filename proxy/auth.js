@@ -102,7 +102,7 @@ const requireSuperAdmin = async (req, res, next) => {
  * Must be used AFTER requireAuth
  */
 const requireAnyAdmin = async (req, res, next) => {
-  if (req.user && ['SUPER_ADMIN', 'TEAM'].includes(req.user.role)) {
+  if (req.user && ['SUPER_ADMIN', 'ADMIN', 'TEAM'].includes(req.user.role)) {
     return next();
   }
 
@@ -143,4 +143,27 @@ const requireCustomer = async (req, res, next) => {
   return res.status(403).json({ success: false, message: 'Access denied — Travelers only' });
 };
 
-module.exports = { requireAuth, requireSuperAdmin, requireAnyAdmin, requireCustomer };
+/**
+ * Middleware: Require Full Admin role (SUPER_ADMIN or ADMIN)
+ * Permits management but excludes base staff (TEAM)
+ */
+const requireFullAdmin = async (req, res, next) => {
+  if (req.user && ['SUPER_ADMIN', 'ADMIN'].includes(req.user.role)) {
+    return next();
+  }
+
+  await AuditLog.create({
+    action: 'PERMISSION_DENIED',
+    user: req.user?._id,
+    email: req.user?.email,
+    ip: getClientIP(req),
+    userAgent: req.headers['user-agent'] || 'unknown',
+    device: detectDevice(req.headers['user-agent']),
+    category: 'HAZARD',
+    reason: `Forbidden: Staff level [TEAM] attempted to access Full Admin resource [${req.originalUrl}]`
+  });
+
+  return res.status(403).json({ success: false, message: 'Access denied — Higher admin privilege required' });
+};
+
+module.exports = { requireAuth, requireSuperAdmin, requireAnyAdmin, requireFullAdmin, requireCustomer };

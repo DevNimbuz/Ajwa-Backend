@@ -15,7 +15,7 @@ const express = require('express');
 const router = express.Router();
 const Package = require('../models/Package');
 const AuditLog = require('../models/AuditLog');
-const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../proxy/auth');
+const { requireAuth, requireSuperAdmin, requireAnyAdmin, requireFullAdmin } = require('../proxy/auth');
 const { getClientIP, detectDevice } = require('../proxy/security');
 const { cacheMiddleware, clearCache } = require('../utils/cache');
 
@@ -154,7 +154,7 @@ router.get('/:slug/pricing', async (req, res) => {
 // ══════════════════════════════════════════════
 // POST /api/packages — Create package (ADMIN)
 // ══════════════════════════════════════════════
-router.post('/', requireAuth, requireAnyAdmin, async (req, res) => {
+router.post('/', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const allowedFields = [
       'slug', 'name', 'title', 'description', 'tagline', 'heroImg', 
@@ -194,7 +194,7 @@ router.post('/', requireAuth, requireAnyAdmin, async (req, res) => {
 // ══════════════════════════════════════════════
 // PUT /api/packages/:id — Update package (ADMIN)
 // ══════════════════════════════════════════════
-router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
+router.put('/:id', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const allowedFields = [
       'slug', 'name', 'title', 'description', 'tagline', 'heroImg', 
