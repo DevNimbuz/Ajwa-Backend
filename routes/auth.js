@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — Auth Routes
+ * Flyajwa — Auth Routes
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * POST /api/auth/login       — Login with email + password → JWT
  * GET  /api/auth/me          — Get current authenticated user

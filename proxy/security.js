@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa Backend — Security Middleware
+ * Flyajwa Backend — Security Middleware
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Honeypot validation, input sanitization, IP hashing
  */

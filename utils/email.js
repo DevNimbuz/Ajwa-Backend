@@ -1,9 +1,10 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa Backend — Email Notification Service
+ * Flyajwa Backend — Email Notification Service
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Sends formatted HTML email alerts for new leads
  * Falls back to console logging if SMTP is not configured
+ * --------------------------------------------------------------------------
  */
 
 const nodemailer = require('nodemailer');
@@ -44,7 +45,7 @@ async function sendLeadNotification(lead) {
   const html = `
     <div style="font-family:'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:20px;">
       <div style="background:linear-gradient(135deg,#1e2a4a,#2a3f5f);color:#fff;padding:24px;border-radius:12px 12px 0 0;">
-        <h2 style="margin:0;font-size:20px;">🔔 New Lead — FlyAjwa</h2>
+        <h2 style="margin:0;font-size:20px;">🔔 New Lead — Flyajwa</h2>
         <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">
           ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
         </p>
@@ -78,7 +79,7 @@ async function sendLeadNotification(lead) {
     await transport.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to,
-      subject: `🔔 New Lead: ${lead.name} — ${lead.destination || 'FlyAjwa'}`,
+      subject: `🔔 New Lead: ${lead.name} — ${lead.destination || 'Flyajwa'}`,
       html,
     });
     console.log(`[Email] Notification sent to ${to}`);
@@ -103,7 +104,7 @@ async function sendOTPEmail({ email, name, otp, type }) {
           ✈️
         </div>
         <h2 style="margin:0;font-size:22px;">Verify Your Email</h2>
-        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">Welcome to FlyAjwa, ${name}!</p>
+        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">Welcome to Flyajwa, ${name}!</p>
       </div>
       <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;padding:32px;border-radius:0 0 16px 16px;text-align:center;">
         <p style="color:#334155;font-size:15px;margin:0 0 24px;">Enter this code to verify your email address:</p>
@@ -123,7 +124,7 @@ async function sendOTPEmail({ email, name, otp, type }) {
     await transport.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to: email,
-      subject: `🔐 FlyAjwa Email Verification Code: ${otp}`,
+      subject: `🔐 Flyajwa Email Verification Code: ${otp}`,
       html,
     });
     console.log(`[Email] OTP sent to ${email}`);
@@ -146,7 +147,7 @@ async function sendPasswordResetEmail({ email, name, resetUrl }) {
     <div style="font-family:'Segoe UI',sans-serif;max-width:500px;margin:0 auto;padding:20px;">
       <div style="background:linear-gradient(135deg,#1e2a4a,#2a3f5f);color:#fff;padding:32px;border-radius:16px 16px 0 0;text-align:center;">
         <h2 style="margin:0;font-size:22px;">Reset Your Password</h2>
-        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">FlyAjwa Travel Account Recovery</p>
+        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">Flyajwa Travel Account Recovery</p>
       </div>
       <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;padding:32px;border-radius:0 0 16px 16px;text-align:center;">
         <p style="color:#334155;font-size:15px;margin:0 0 24px;">Hello ${name}, you requested to reset your password. Click the button below to choose a new one:</p>
@@ -168,7 +169,7 @@ async function sendPasswordResetEmail({ email, name, resetUrl }) {
     await transport.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to: email,
-      subject: `🔐 FlyAjwa Password Reset Request`,
+      subject: `🔐 Flyajwa Password Reset Request`,
       html,
     });
     console.log(`[Email] Reset link sent to ${email}`);

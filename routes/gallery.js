@@ -100,7 +100,7 @@ router.post('/', requireAuth, requireAnyAdmin, upload.array('images', 20), async
       return {
         url: result.secure_url,          // Full Cloudinary CDN URL
         cloudinaryId: result.public_id,  // For deletion later
-        alt: req.body.alt || 'FlyAjwa Travel Memory',
+        alt: req.body.alt || 'Flyajwa Travel Memory',
         packageSlug: req.body.packageSlug || null,
         uploadedBy: req.user._id,
       };

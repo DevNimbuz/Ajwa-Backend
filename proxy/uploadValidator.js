@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa Backend — File Upload Validation
+ * Flyajwa Backend — File Upload Validation
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Validates file types, sizes, and prevents malicious uploads
  */

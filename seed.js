@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa Backend — Database Seed Script
+ * Flyajwa Backend — Database Seed Script
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Run: cd backend && node seed.js
  *
@@ -11,7 +11,7 @@
  *
  * ┌─────────────────────────────────────────────┐
  * │  Admin Email:    admin@flyajwa.com          │
- * │  Admin Password: FlyAjwa@Admin2026!         │
+ * │  Admin Password: Flyajwa@Admin2026!         │
  * └─────────────────────────────────────────────┘
  */
 
@@ -262,7 +262,7 @@ async function seed() {
       process.exit(1);
     }
 
-    console.log('\n🌱 Seeding FlyAjwa database...\n');
+    console.log('\n🌱 Seeding Flyajwa database...\n');
 
     // Connect to MongoDB
     await mongoose.connect(process.env.MONGO_URI);
@@ -282,7 +282,7 @@ async function seed() {
       admin = await User.create({
         email: adminEmail,
         password: adminPassword, // pre-save hook hashes this
-        name: 'FlyAjwa Admin',
+        name: 'Flyajwa Admin',
         phone: '+919846617000',
         role: 'SUPER_ADMIN',
       });

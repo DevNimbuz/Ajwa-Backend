@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — Visitor Tracking Routes
+ * Flyajwa — Visitor Tracking Routes
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * POST /api/visitors           — Track page view (public)
  * GET  /api/visitors/analytics — Visitor statistics (admin)

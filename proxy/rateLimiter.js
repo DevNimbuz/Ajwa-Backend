@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa Backend — Rate Limiting Middleware
+ * Flyajwa Backend — Rate Limiting Middleware
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Protects against brute force attacks and spam
  * Uses express-rate-limit with different tiers

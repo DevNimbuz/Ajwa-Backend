@@ -1,5 +1,5 @@
 /**
- * FlyAjwa WhatsApp Utility
+ * Flyajwa WhatsApp Utility
  * Interface for Meta Cloud API or Third-Party WhatsApp Gateways
  */
 const axios = require('axios');
@@ -30,7 +30,7 @@ async function sendWhatsAppGreeting(phone, name, destination) {
               type: "body",
               parameters: [
                 { type: "text", text: name },
-                { type: "text", text: destination || "FlyAjwa Holidays" }
+                { type: "text", text: destination || "Flyajwa Holidays" }
               ]
             }
           ]

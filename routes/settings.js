@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — Settings Routes
+ * Flyajwa — Settings Routes
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * GET /api/settings     — Get all settings (admin)
  * PUT /api/settings     — Update settings (super admin)

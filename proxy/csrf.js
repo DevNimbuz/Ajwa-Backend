@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa Backend — CSRF Protection Middleware
+ * Flyajwa Backend — CSRF Protection Middleware
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Double-submit cookie pattern:
  * 1. Server sets a random CSRF token in a readable cookie

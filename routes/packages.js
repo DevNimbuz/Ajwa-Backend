@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — Package Routes
+ * Flyajwa — Package Routes
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * GET    /api/packages             — List all active packages (public)
  * GET    /api/packages/all         — List ALL packages including inactive (admin)

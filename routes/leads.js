@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — Lead Routes
+ * Flyajwa — Lead Routes
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * POST   /api/leads              — Submit new lead (public, rate limited) | Logged in customers auto-linked
  * GET    /api/leads              — List leads with filters (admin)

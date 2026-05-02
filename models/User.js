@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — User Model (Mongoose)
+ * Flyajwa — User Model (Mongoose)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Roles: SUPER_ADMIN (full access) | TEAM (limited access) | CUSTOMER (traveler)
  * Password is bcrypt hashed before save

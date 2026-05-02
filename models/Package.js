@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — Package Model (Mongoose)
+ * Flyajwa — Package Model (Mongoose)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Tour package with embedded pricing variants
  * Each variant = combination of (days, flight, hotel star)

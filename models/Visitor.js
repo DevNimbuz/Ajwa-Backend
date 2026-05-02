@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — Visitor Model (Mongoose)
+ * Flyajwa — Visitor Model (Mongoose)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Anonymous page view tracking for analytics
  * Privacy-preserving: IPs are hashed, no PII stored

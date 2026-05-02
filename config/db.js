@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa Backend — MongoDB Connection
+ * Flyajwa Backend — MongoDB Connection
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Connects to MongoDB Atlas (production) or local MongoDB (dev)
  * Uses Mongoose ODM for schema validation and queries

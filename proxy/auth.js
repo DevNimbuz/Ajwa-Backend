@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa Backend — JWT Authentication Middleware
+ * Flyajwa Backend — JWT Authentication Middleware
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * - requireAuth: verifies JWT token, attaches user to req
  * - requireSuperAdmin: ensures user is SUPER_ADMIN

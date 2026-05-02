@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — User/Team Management Routes
+ * Flyajwa — User/Team Management Routes
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * All routes require AUTH
  * GET    /api/users         — List team members (admin)
@@ -119,7 +119,7 @@ router.put('/customers/:id', requireAnyAdmin, async (req, res) => {
       const parsed = new URL(url);
       const allowedHosts = ['res.cloudinary.com', 'cloudinary.com', 'flyajwa.com', 'www.flyajwa.com'];
       if (!['https:'].includes(parsed.protocol) || !allowedHosts.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
-        return res.status(400).json({ success: false, message: 'Only Cloudinary or FlyAjwa hosted documents are allowed' });
+        return res.status(400).json({ success: false, message: 'Only Cloudinary or Flyajwa hosted documents are allowed' });
       }
     } catch {
       return res.status(400).json({ success: false, message: 'Invalid document URL' });

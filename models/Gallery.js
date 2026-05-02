@@ -10,7 +10,7 @@ const GallerySchema = new mongoose.Schema({
   },
   alt: {
     type: String,
-    default: 'FlyAjwa Travel Moment',
+    default: 'Flyajwa Travel Moment',
   },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,

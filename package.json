@@ -1,7 +1,7 @@
 {
   "name": "flyajwa-backend",
   "version": "1.0.0",
-  "description": "FlyAjwa Travel Agency — Backend API (Express + MongoDB)",
+  "description": "Flyajwa Travel Agency — Backend API (Express + MongoDB)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

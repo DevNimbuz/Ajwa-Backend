@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — Setting Model (Mongoose)
+ * Flyajwa — Setting Model (Mongoose)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Key-value store for dynamic site configuration
  * Examples: contact_phones, whatsapp_number, announcement

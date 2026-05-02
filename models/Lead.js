@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — Lead Model (Mongoose)
+ * Flyajwa — Lead Model (Mongoose)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Tracks every customer enquiry from website, WhatsApp, phone
  * Status funnel: NEW → CONTACTED → INTERESTED → QUOTED → BOOKED

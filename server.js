@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa Backend — Express Server
+ * Flyajwa Backend — Express Server
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * MERN Stack API Server
  * - MongoDB (Mongoose) for data
@@ -113,7 +113,7 @@ app.get('/api/health', (req, res) => {
   const status = dbReady ? 200 : 503;
   res.status(status).json({
     success: dbReady,
-    message: dbReady ? 'FlyAjwa API is running' : 'Database not ready',
+    message: dbReady ? 'Flyajwa API is running' : 'Database not ready',
     database: dbReady ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
@@ -181,7 +181,7 @@ async function startServer() {
   await connectDB();
   
   app.listen(PORT, () => {
-    console.log(`🚀 FlyAjwa API: http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
+    console.log(`🚀 Flyajwa API: http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
   });
 }
 

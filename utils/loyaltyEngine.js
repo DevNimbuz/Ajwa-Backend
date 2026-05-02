@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * FlyAjwa — Loyalty Points Engine
+ * Flyajwa — Loyalty Points Engine
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * Calculates points based on spend, membership duration,
  * frequency of travel, and bonus triggers.
