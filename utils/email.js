@@ -8,8 +8,7 @@ async function sendEmailViaBrevo(payload) {
   const BREVO_API_KEY = process.env.BREVO_API_KEY;
   
   if (!BREVO_API_KEY) {
-    console.warn('[Email] BREVO_API_KEY missing. Logging email to console instead.');
-    console.log('[Email] DUMMY EMAIL:', JSON.stringify(payload, null, 2));
+    // Only log dummy emails in non-production environments if needed
     return { success: true, method: 'console' };
   }
 
@@ -27,7 +26,7 @@ async function sendEmailViaBrevo(payload) {
       }
     });
 
-    console.log(`[Email] Brevo API Success: ${response.data.messageId}`);
+    // Log success only if needed for audit trails
     return { success: true, method: 'api' };
   } catch (error) {
     console.error('[Email] Brevo API Error:', {

@@ -485,7 +485,7 @@ router.post('/wishlist/:packageId', requireAuth, async (req, res) => {
     const Package = require('../models/Package');
     const { packageId } = req.params;
     
-    console.log('[Wishlist] Add request:', { packageId });
+    // Add to wishlist logic
     
     let pkg;
     if (packageId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -494,7 +494,7 @@ router.post('/wishlist/:packageId', requireAuth, async (req, res) => {
       pkg = await Package.findOne({ slug: packageId });
     }
     
-    console.log('[Wishlist] Package found:', pkg ? pkg.slug : null);
+    
     
     if (!pkg) {
       return res.status(404).json({ success: false, message: 'Package not found' });
