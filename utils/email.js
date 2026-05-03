@@ -45,17 +45,24 @@ function getTransporter() {
     const user = SMTP_USER.trim();
     const pass = SMTP_PASSWORD.replace(/\s/g, ''); // Ensure no spaces
 
-    // Manual config often works better on Render than the 'service' shorthand
+    // High-compatibility manual config for Gmail
     const config = {
       host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // Use STARTTLS
+      port: 465,
+      secure: true, // Use SSL/TLS
+      pool: true, // Use connection pooling
       auth: { user, pass },
       debug: true,
       logger: true,
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      family: 4 // Force IPv4
+      connectionTimeout: 20000,
+      greetingTimeout: 20000,
+      socketTimeout: 20000,
+      dnsTimeout: 10000,
+      family: 4, // Force IPv4
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2'
+      }
     };
 
     transporter = nodemailer.createTransport(config);
