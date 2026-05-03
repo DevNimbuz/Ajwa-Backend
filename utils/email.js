@@ -19,19 +19,33 @@ function getTransporter() {
 
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD } = process.env;
 
+  // Check if variables are missing or empty strings
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD) {
-    console.log('[Email] SMTP not configured — notifications logged to console');
+    console.warn('[Email] SMTP Configuration Missing:', {
+      host: !!SMTP_HOST,
+      user: !!SMTP_USER,
+      pass: !!SMTP_PASSWORD
+    });
+    console.log('[Email] Falling back to console logging');
     return null;
   }
 
-  transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: parseInt(SMTP_PORT || '587'),
-    secure: parseInt(SMTP_PORT || '587') === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
-  });
-
-  return transporter;
+  try {
+    transporter = nodemailer.createTransport({
+      host: SMTP_HOST.trim(),
+      port: parseInt(SMTP_PORT || '587'),
+      secure: parseInt(SMTP_PORT || '587') === 465,
+      auth: { user: SMTP_USER.trim(), pass: SMTP_PASSWORD.trim() },
+      tls: {
+        // Do not fail on invalid certs (common with some shared hosts)
+        rejectUnauthorized: false
+      }
+    });
+    return transporter;
+  } catch (error) {
+    console.error('[Email] Transporter creation failed:', error.message);
+    return null;
+  }
 }
 
 /**
@@ -85,7 +99,12 @@ async function sendLeadNotification(lead) {
     console.log(`[Email] Notification sent to ${to}`);
     return { success: true, method: 'email' };
   } catch (error) {
-    console.error('[Email] Failed:', error.message);
+    console.error('[Email] SMTP Send Error:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      command: error.command
+    });
     return { success: false, error: error.message };
   }
 }
@@ -121,16 +140,21 @@ async function sendOTPEmail({ email, name, otp, type }) {
   }
 
   try {
+    const from = process.env.SMTP_FROM || process.env.SMTP_USER;
     await transport.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      from,
       to: email,
       subject: `🔐 Flyajwa Email Verification Code: ${otp}`,
       html,
     });
-    console.log(`[Email] OTP sent to ${email}`);
+    console.log(`[Email] OTP sent to ${email} (via ${from})`);
     return { success: true, method: 'email' };
   } catch (error) {
-    console.error('[Email] OTP failed:', error.message);
+    console.error('[Email] OTP Send Error:', {
+      to: email,
+      error: error.message,
+      code: error.code
+    });
     return { success: false, error: error.message };
   }
 }

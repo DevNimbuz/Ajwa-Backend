@@ -74,12 +74,10 @@ router.post('/login', [
     const device = detectDevice(userAgent);
 
     // Find user by email
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email }).select('+password +emailOTP +pendingRegistration');
 
     if (!user) {
       console.warn(`[Auth] Login failed: User not found (${email})`);
-      // Log generic failure to avoid account enumeration if possible, 
-      // but here we already have the email so we log it
       await AuditLog.create({
         action: 'LOGIN_FAILURE',
         email,
@@ -90,6 +88,52 @@ router.post('/login', [
         reason: 'Failed login attempt: Account does not exist'
       });
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    }
+
+    // Check if account is verified (Only for CUSTOMERS, Admins/Staff should be pre-verified)
+    if (user.role === 'CUSTOMER' && !user.isVerified) {
+      console.log(`[Auth] Unverified login attempt for ${email}. Resending OTP.`);
+      
+      const crypto = require('crypto');
+      const newOTP = crypto.randomInt(100000, 999999).toString();
+      
+      // Update OTP and session
+      user.emailOTP = {
+        code: newOTP,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        attempts: 0
+      };
+      
+      // Ensure pendingRegistration exists or restore it if it was lost
+      if (!user.pendingRegistration || !user.pendingRegistration.email) {
+        // Fallback: Use current user data if pendingRegistration is missing
+        user.pendingRegistration = {
+          name: user.name || 'Traveler',
+          phone: user.phone,
+          email: user.email,
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        };
+      } else {
+        user.pendingRegistration.expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+      }
+
+      await user.save();
+
+      // Send OTP (non-blocking)
+      sendOTPEmail({ 
+        email: user.email, 
+        name: user.pendingRegistration.name || user.name, 
+        otp: newOTP, 
+        type: 'email' 
+      }).catch(err => console.error('[Auth] Login-triggered OTP fail:', err.message));
+
+      return res.status(403).json({
+        success: false,
+        type: 'VERIFICATION_REQUIRED',
+        message: 'Your account is not verified. A new code has been sent to your email.',
+        verifyToken: user._id.toString(),
+        emailMasked: user.email.replace(/(.{2}).*(@.*)/, '$1***$2')
+      });
     }
 
     // Check if account is locked
@@ -107,6 +151,11 @@ router.post('/login', [
     }
 
     // Compare password
+    // Safety check: If password hash is missing (shouldn't happen for verified users)
+    if (!user.password) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    }
+
     const isMatch = await user.comparePassword(password);
     
     if (!isMatch) {
@@ -116,6 +165,25 @@ router.post('/login', [
       
       if (user.failedLoginAttempts >= 5) {
         user.lockUntil = Date.now() + 15 * 60 * 1000; // Lock for 15 mins
+        message = 'Account locked for 15 minutes due to multiple failed attempts.';
+      }
+      
+      await user.save();
+
+      await AuditLog.create({
+        action: 'LOGIN_FAILURE',
+        user: user._id,
+        email: user.email,
+        ip: clientIP,
+        userAgent,
+        device,
+        category: 'HAZARD',
+        reason: `Failed login attempt: Incorrect password (Attempt ${user.failedLoginAttempts})`
+      });
+      
+      return res.status(401).json({ success: false, message });
+    }
+.now() + 15 * 60 * 1000; // Lock for 15 mins
         message = 'Account locked for 15 minutes due to multiple failed attempts.';
       }
       
