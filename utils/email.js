@@ -31,16 +31,45 @@ function getTransporter() {
   }
 
   try {
-    transporter = nodemailer.createTransport({
-      host: SMTP_HOST.trim(),
-      port: parseInt(SMTP_PORT || '587'),
-      secure: parseInt(SMTP_PORT || '587') === 465,
-      auth: { user: SMTP_USER.trim(), pass: SMTP_PASSWORD.trim() },
-      tls: {
-        // Do not fail on invalid certs (common with some shared hosts)
-        rejectUnauthorized: false
+    const host = SMTP_HOST.trim();
+    const isGmail = host.includes('gmail.com');
+
+    console.log('[Email] Configuring transporter:', {
+      service: isGmail ? 'gmail' : 'custom',
+      host: isGmail ? 'smtp.gmail.com' : host,
+      port: isGmail ? 'default' : SMTP_PORT,
+      user: SMTP_USER.trim(),
+      hasPassword: !!SMTP_PASSWORD
+    });
+
+    const config = isGmail 
+      ? {
+          service: 'gmail',
+          auth: { user: SMTP_USER.trim(), pass: SMTP_PASSWORD.trim() }
+        }
+      : {
+          host,
+          port: parseInt(SMTP_PORT || '587'),
+          secure: parseInt(SMTP_PORT || '587') === 465,
+          auth: { user: SMTP_USER.trim(), pass: SMTP_PASSWORD.trim() },
+          tls: { rejectUnauthorized: false }
+        };
+
+    transporter = nodemailer.createTransport(config);
+
+    // Verify connection on creation (async check, but log result)
+    transporter.verify((error, success) => {
+      if (error) {
+        console.error('[Email] SMTP Verification Failed:', {
+          message: error.message,
+          code: error.code,
+          command: error.command
+        });
+      } else {
+        console.log('[Email] SMTP Server is ready to take messages');
       }
     });
+
     return transporter;
   } catch (error) {
     console.error('[Email] Transporter creation failed:', error.message);
@@ -114,6 +143,7 @@ async function sendLeadNotification(lead) {
  * @param {Object} data - { email, name, otp, type }
  */
 async function sendOTPEmail({ email, name, otp, type }) {
+  console.log(`[Email] Preparing to send OTP to ${email}...`);
   const transport = getTransporter();
   
   const html = `
