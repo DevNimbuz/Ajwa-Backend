@@ -183,25 +183,6 @@ router.post('/login', [
       
       return res.status(401).json({ success: false, message });
     }
-.now() + 15 * 60 * 1000; // Lock for 15 mins
-        message = 'Account locked for 15 minutes due to multiple failed attempts.';
-      }
-      
-      await user.save();
-
-      await AuditLog.create({
-        action: 'LOGIN_FAILURE',
-        user: user._id,
-        email: user.email,
-        ip: clientIP,
-        userAgent,
-        device,
-        category: 'HAZARD',
-        reason: `Failed login attempt: Incorrect password (Attempt ${user.failedLoginAttempts})`
-      });
-      
-      return res.status(401).json({ success: false, message });
-    }
 
     // Success: Reset brute force tracking
     user.failedLoginAttempts = 0;
