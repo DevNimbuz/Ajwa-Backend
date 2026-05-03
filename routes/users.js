@@ -10,13 +10,36 @@
  * DELETE /api/users/:id     — Delete team member
  */
 
-const express = require('express');
-const router = express.Router();
-const User = require('../models/User');
-const Lead = require('../models/Lead');
-const AuditLog = require('../models/AuditLog');
-const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../proxy/auth');
-const { getClientIP, detectDevice } = require('../proxy/security');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const { validateFile } = require('../proxy/uploadValidator');
+
+// ── Cloudinary config ──
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// ── Upload helper ──
+const uploadToCloudinary = (buffer, folder = 'flyajwa/documents', resourceType = 'auto') => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder, resource_type: resourceType },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+    stream.end(buffer);
+  });
+};
+
+// ── Multer setup ──
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
 
 // All routes require authentication
 router.use(requireAuth);
@@ -105,7 +128,59 @@ router.get('/customers/:id', requireAnyAdmin, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════
-// PUT /api/users/customers/:id — Upload document to customer vault
+// POST /api/users/customers/:id/documents — Upload document (FILE)
+// ══════════════════════════════════════════════
+router.post('/customers/:id/documents', requireAnyAdmin, upload.single('document'), async (req, res) => {
+  try {
+    const { name, type } = req.body;
+    
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    // Validate file
+    const validation = validateFile(req.file, req.file.mimetype.includes('image') ? 'image' : 'document');
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, message: validation.error });
+    }
+
+    const customer = await User.findById(req.params.id);
+    if (!customer || customer.role !== 'CUSTOMER') {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    // Upload to Cloudinary
+    const result = await uploadToCloudinary(req.file.buffer, 'flyajwa/documents', 'auto');
+
+    customer.documents.push({
+      name: name || req.file.originalname,
+      url: result.secure_url,
+      type: type || 'other',
+      uploadedAt: new Date()
+    });
+    
+    await customer.save();
+
+    await AuditLog.create({
+      action: 'USER_MUTATION',
+      user: req.user._id,
+      email: req.user.email,
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || 'unknown',
+      category: 'SYSTEM',
+      reason: `Uploaded file "${name || req.file.originalname}" to customer vault`,
+      metadata: { customerId: customer._id, documentName: name, documentType: type }
+    });
+
+    res.json({ success: true, message: 'Document uploaded successfully', data: customer.documents });
+  } catch (error) {
+    console.error('[Document Upload Error]', error.message);
+    res.status(500).json({ success: false, message: 'Upload failed' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// PUT /api/users/customers/:id — Upload document (URL - legacy)
 // ══════════════════════════════════════════════
 router.put('/customers/:id', requireAnyAdmin, async (req, res) => {
   try {
