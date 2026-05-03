@@ -89,22 +89,29 @@ router.get('/customers', requireAnyAdmin, async (req, res) => {
       ];
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    // MED-1 FIX: Strip auth-state internals from customer responses
+    const limitNum = parseInt(limit) || 20;
+    const skip = (parseInt(page) - 1) * limitNum;
+    
+    // Use inclusion-based select to avoid path collisions with select:false fields (M1/M2 Fix)
     const customers = await User.find(query)
-      .select('-password -tokenVersion -verificationToken -resetPasswordToken -resetPasswordExpire -failedLoginAttempts -lockUntil -emailOTP -phoneOTP -pendingRegistration')
+      .select('name email phone role isActive ajwaPoints profile documents createdAt')
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limitNum);
 
     const total = await User.countDocuments(query);
 
     res.json({
       success: true,
       data: customers,
-      pagination: { page: parseInt(page), pages: Math.ceil(total / limit), total }
+      pagination: { 
+        page: parseInt(page), 
+        pages: Math.max(1, Math.ceil(total / limitNum)), 
+        total 
+      }
     });
   } catch (error) {
+    console.error('[Users] Fetch customers error:', error.message);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -115,7 +122,7 @@ router.get('/customers', requireAnyAdmin, async (req, res) => {
 router.get('/customers/:id', requireAnyAdmin, async (req, res) => {
   try {
     const customer = await User.findById(req.params.id)
-      .select('-password -tokenVersion -verificationToken');
+      .select('-emailOTP -phoneOTP -pendingRegistration -failedLoginAttempts -lockUntil');
     
     if (!customer || customer.role !== 'CUSTOMER') {
       return res.status(404).json({ success: false, message: 'Customer not found' });

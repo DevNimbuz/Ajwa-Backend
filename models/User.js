@@ -90,13 +90,13 @@ const UserSchema = new mongoose.Schema({
   },
   // ── OTP Verification Fields ──
   emailOTP: {
-    code: { type: String, select: false },
-    expiresAt: { type: Date, select: false },
+    code: { type: String },
+    expiresAt: { type: Date },
     attempts: { type: Number, default: 0 },
   },
   phoneOTP: {
-    code: { type: String, select: false },
-    expiresAt: { type: Date, select: false },
+    code: { type: String },
+    expiresAt: { type: Date },
     attempts: { type: Number, default: 0 },
   },
   // ── Pending Registration (for OTP verification) ──
@@ -104,8 +104,8 @@ const UserSchema = new mongoose.Schema({
     name: { type: String },
     phone: { type: String },
     email: { type: String },
-    password: { type: String, select: false },
-    expiresAt: { type: Date, select: false },
+    password: { type: String },
+    expiresAt: { type: Date },
   },
   profile: {
     type: ProfileSchema,
