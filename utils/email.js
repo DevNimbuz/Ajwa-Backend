@@ -42,17 +42,29 @@ function getTransporter() {
       hasPassword: !!SMTP_PASSWORD
     });
 
+    const user = SMTP_USER.trim();
+    const pass = SMTP_PASSWORD.replace(/\s/g, ''); // Ensure no spaces
+
     const config = isGmail 
       ? {
           service: 'gmail',
-          auth: { user: SMTP_USER.trim(), pass: SMTP_PASSWORD.trim() }
+          auth: { user, pass },
+          debug: true,
+          logger: true,
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          // Force IPv4 - often resolves Render timeouts
+          family: 4
         }
       : {
           host,
           port: parseInt(SMTP_PORT || '587'),
           secure: parseInt(SMTP_PORT || '587') === 465,
-          auth: { user: SMTP_USER.trim(), pass: SMTP_PASSWORD.trim() },
-          tls: { rejectUnauthorized: false }
+          auth: { user, pass },
+          tls: { rejectUnauthorized: false },
+          debug: true,
+          logger: true,
+          family: 4
         };
 
     transporter = nodemailer.createTransport(config);
