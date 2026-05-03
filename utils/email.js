@@ -1,99 +1,49 @@
-/**
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * Flyajwa Backend — Email Notification Service
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * Sends formatted HTML email alerts for new leads
- * Falls back to console logging if SMTP is not configured
- * --------------------------------------------------------------------------
- */
-
-const nodemailer = require('nodemailer');
-
-let transporter = null;
+const axios = require('axios');
 
 /**
- * Gets or creates the SMTP transporter
+ * Sends an email using Brevo (formerly Sendinblue) API
+ * This bypasses SMTP port blocking on cloud providers like Render.
  */
-function getTransporter() {
-  if (transporter) return transporter;
-
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD } = process.env;
-
-  // Check if variables are missing or empty strings
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD) {
-    console.warn('[Email] SMTP Configuration Missing:', {
-      host: !!SMTP_HOST,
-      user: !!SMTP_USER,
-      pass: !!SMTP_PASSWORD
-    });
-    console.log('[Email] Falling back to console logging');
-    return null;
+async function sendEmailViaBrevo(payload) {
+  const BREVO_API_KEY = process.env.BREVO_API_KEY;
+  
+  if (!BREVO_API_KEY) {
+    console.warn('[Email] BREVO_API_KEY missing. Logging email to console instead.');
+    console.log('[Email] DUMMY EMAIL:', JSON.stringify(payload, null, 2));
+    return { success: true, method: 'console' };
   }
 
   try {
-    const host = SMTP_HOST.trim();
-    const isGmail = host.includes('gmail.com');
-
-    console.log('[Email] Configuring transporter:', {
-      service: isGmail ? 'gmail' : 'custom',
-      host: isGmail ? 'smtp.gmail.com' : host,
-      port: isGmail ? 'default' : SMTP_PORT,
-      user: SMTP_USER.trim(),
-      hasPassword: !!SMTP_PASSWORD
-    });
-
-    const user = SMTP_USER.trim();
-    const pass = SMTP_PASSWORD.replace(/\s/g, ''); // Ensure no spaces
-
-    // High-compatibility manual config for Gmail
-    const config = {
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // Use SSL/TLS
-      pool: true, // Use connection pooling
-      auth: { user, pass },
-      debug: true,
-      logger: true,
-      connectionTimeout: 20000,
-      greetingTimeout: 20000,
-      socketTimeout: 20000,
-      dnsTimeout: 10000,
-      family: 4, // Force IPv4
-      tls: {
-        rejectUnauthorized: false,
-        minVersion: 'TLSv1.2'
-      }
-    };
-
-    transporter = nodemailer.createTransport(config);
-
-    // Verify connection on creation
-    transporter.verify((error, success) => {
-      if (error) {
-        console.error('[Email] SMTP Verification Failed:', {
-          message: error.message,
-          code: error.code,
-          command: error.command
-        });
-      } else {
-        console.log('[Email] SMTP Server is ready to take messages');
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
+      sender: { 
+        name: 'Flyajwa', 
+        email: process.env.SMTP_FROM || 'no-reply@flyajwa.com' 
+      },
+      ...payload
+    }, {
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json'
       }
     });
 
-    return transporter;
+    console.log(`[Email] Brevo API Success: ${response.data.messageId}`);
+    return { success: true, method: 'api' };
   } catch (error) {
-    console.error('[Email] Transporter creation failed:', error.message);
-    return null;
+    console.error('[Email] Brevo API Error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    return { success: false, error: error.message };
   }
 }
 
 /**
  * Sends a new lead notification email to the admin
- * @param {Object} lead - Lead data (name, phone, email, destination, message, source)
  */
 async function sendLeadNotification(lead) {
-  const transport = getTransporter();
-  const to = process.env.NOTIFICATION_EMAIL || process.env.SMTP_USER;
+  const to = process.env.NOTIFICATION_EMAIL || process.env.SMTP_USER || 'admin@flyajwa.com';
 
   const html = `
     <div style="font-family:'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:20px;">
@@ -110,58 +60,24 @@ async function sendLeadNotification(lead) {
           <tr><td style="padding:8px 0;color:#64748b;">Email</td><td>${lead.email || 'N/A'}</td></tr>
           <tr><td style="padding:8px 0;color:#64748b;">Destination</td><td><span style="background:#ecfdf5;color:#059669;padding:2px 8px;border-radius:4px;">${lead.destination || 'Not specified'}</span></td></tr>
           <tr><td style="padding:8px 0;color:#64748b;">Source</td><td style="text-transform:capitalize;">${lead.source || 'website'}</td></tr>
-          ${lead.serviceType ? `<tr><td style="padding:8px 0;color:#64748b;">Service Type</td><td style="font-weight:600;color:#63ab45;">${lead.serviceType}</td></tr>` : ''}
-          ${lead.serviceDetails && (lead.serviceDetails.size > 0 || Object.keys(lead.serviceDetails).length > 0) 
-              ? (typeof lead.serviceDetails.entries === 'function' ? Array.from(lead.serviceDetails.entries()) : Object.entries(lead.serviceDetails))
-                  .map(([k, v]) => `<tr><td style="padding:8px 0;color:#64748b;">${k}</td><td style="font-weight:600;">${v}</td></tr>`).join('') 
-              : ''}
-          ${lead.message ? `<tr><td colspan="2" style="padding:12px 0 0;"><div style="background:#f8fafc;border-radius:8px;padding:12px;font-size:14px;color:#334155;"><strong style="display:block;margin-bottom:4px;color:#64748b;font-size:12px;">Message:</strong>${lead.message}</div></td></tr>` : ''}
         </table>
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">
-          <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/leads" style="display:inline-block;background:#63ab45;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">View in Admin →</a>
-        </div>
       </div>
     </div>`;
 
-  if (!transport) {
-    console.log(`[Email] New lead: ${lead.name} — ${lead.phone} — ${lead.destination || 'N/A'}`);
-    return { success: true, method: 'console' };
-  }
-
-  try {
-    await transport.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to,
-      subject: `🔔 New Lead: ${lead.name} — ${lead.destination || 'Flyajwa'}`,
-      html,
-    });
-    console.log(`[Email] Notification sent to ${to}`);
-    return { success: true, method: 'email' };
-  } catch (error) {
-    console.error('[Email] SMTP Send Error:', {
-      message: error.message,
-      stack: error.stack,
-      code: error.code,
-      command: error.command
-    });
-    return { success: false, error: error.message };
-  }
+  return sendEmailViaBrevo({
+    to: [{ email: to }],
+    subject: `🔔 New Lead: ${lead.name} — ${lead.destination || 'Flyajwa'}`,
+    htmlContent: html
+  });
 }
 
 /**
  * Sends OTP verification email
- * @param {Object} data - { email, name, otp, type }
  */
 async function sendOTPEmail({ email, name, otp, type }) {
-  console.log(`[Email] Preparing to send OTP to ${email}...`);
-  const transport = getTransporter();
-  
   const html = `
     <div style="font-family:'Segoe UI',sans-serif;max-width:500px;margin:0 auto;padding:20px;">
       <div style="background:linear-gradient(135deg,#1e2a4a,#2a3f5f);color:#fff;padding:32px;border-radius:16px 16px 0 0;text-align:center;">
-        <div style="width:60px;height:60px;margin:0 auto 16px;background:rgba(99,171,69,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;">
-          ✈️
-        </div>
         <h2 style="margin:0;font-size:22px;">Verify Your Email</h2>
         <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">Welcome to Flyajwa, ${name}!</p>
       </div>
@@ -174,39 +90,17 @@ async function sendOTPEmail({ email, name, otp, type }) {
       </div>
     </div>`;
 
-  if (!transport) {
-    console.log(`[Email] OTP for ${email} (${type}): ${otp}`);
-    return { success: true, method: 'console' };
-  }
-
-  try {
-    const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-    await transport.sendMail({
-      from,
-      to: email,
-      subject: `🔐 Flyajwa Email Verification Code: ${otp}`,
-      html,
-    });
-    console.log(`[Email] OTP sent to ${email} (via ${from})`);
-    return { success: true, method: 'email' };
-  } catch (error) {
-    console.error('[Email] OTP Send Error:', {
-      to: email,
-      error: error.message,
-      code: error.code
-    });
-    return { success: false, error: error.message };
-  }
+  return sendEmailViaBrevo({
+    to: [{ email }],
+    subject: `🔐 Flyajwa Email Verification Code: ${otp}`,
+    htmlContent: html
+  });
 }
-
 
 /**
  * Sends Password Reset email
- * @param {Object} data - { email, name, resetUrl }
  */
 async function sendPasswordResetEmail({ email, name, resetUrl }) {
-  const transport = getTransporter();
-  
   const html = `
     <div style="font-family:'Segoe UI',sans-serif;max-width:500px;margin:0 auto;padding:20px;">
       <div style="background:linear-gradient(135deg,#1e2a4a,#2a3f5f);color:#fff;padding:32px;border-radius:16px 16px 0 0;text-align:center;">
@@ -224,24 +118,15 @@ async function sendPasswordResetEmail({ email, name, resetUrl }) {
       </div>
     </div>`;
 
-  if (!transport) {
-    console.log(`[Email] Password Reset Link for ${email}: ${resetUrl}`);
-    return { success: true, method: 'console' };
-  }
-
-  try {
-    await transport.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to: email,
-      subject: `🔐 Flyajwa Password Reset Request`,
-      html,
-    });
-    console.log(`[Email] Reset link sent to ${email}`);
-    return { success: true, method: 'email' };
-  } catch (error) {
-    console.error('[Email] Reset failed:', error.message);
-    return { success: false, error: error.message };
-  }
+  return sendEmailViaBrevo({
+    to: [{ email }],
+    subject: `🔐 Flyajwa Password Reset Request`,
+    htmlContent: html
+  });
 }
 
-module.exports = { sendLeadNotification, sendOTPEmail, sendPasswordResetEmail };
+module.exports = { 
+  sendLeadNotification, 
+  sendOTPEmail, 
+  sendPasswordResetEmail 
+};
