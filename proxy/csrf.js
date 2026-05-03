@@ -28,8 +28,9 @@ function csrfProtection(req, res, next) {
   // Skip for safe HTTP methods
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     // Ensure a CSRF cookie exists for subsequent POST/PUT/DELETE
-    if (!req.cookies._csrf) {
-      const token = generateCSRFToken();
+    let token = req.cookies._csrf;
+    if (!token) {
+      token = generateCSRFToken();
       const isProd = process.env.NODE_ENV === 'production';
       res.cookie('_csrf', token, {
         httpOnly: false,    // Must be readable by JS
@@ -37,8 +38,9 @@ function csrfProtection(req, res, next) {
         sameSite: isProd ? 'None' : 'Lax',
         maxAge: 24 * 60 * 60 * 1000,
       });
-      res.setHeader('X-CSRF-Token', token);
     }
+    // ALWAYS set the header on GET requests to keep frontend in sync
+    res.setHeader('X-CSRF-Token', token);
     return next();
   }
 
@@ -46,41 +48,47 @@ function csrfProtection(req, res, next) {
   const cookieToken = req.cookies._csrf;
   const headerToken = req.headers['x-csrf-token'];
 
+  // ── Exception: Login/Registration Routes ──
+  // Skip CSRF for these specific routes if not logged in
+  // This prevents the "Invalid CSRF" deadlock during login attempts
+  const isAuthRoute = req.path.includes('/auth/login') || 
+                      req.path.includes('/auth/send-otp') || 
+                      req.path.includes('/auth/verify-otp') ||
+                      req.path.includes('/auth/forgot-password') ||
+                      req.path.includes('/auth/reset-password');
+
+  if (isAuthRoute && !req.cookies.token) {
+    return next();
+  }
+
   // If no auth cookie present, this is an unauthenticated request (public forms)
   // Still allow — the auth middleware will reject unauthorized access downstream
-  if (!req.cookies.token) {
+  if (!req.cookies.token && !isAuthRoute) {
     return next();
   }
 
   // Authenticated state-changing request: enforce CSRF
   if (!cookieToken || !headerToken) {
+    console.warn(`[CSRF] Missing token at ${req.path}. Cookie: ${!!cookieToken}, Header: ${!!headerToken}`);
     return res.status(403).json({
       success: false,
-      message: 'CSRF token missing. Please refresh the page and try again.',
+      message: 'Session security check failed. Please refresh the page and try again.',
     });
   }
 
   // Constant-time comparison to prevent timing attacks
   if (cookieToken.length !== headerToken.length || 
       !crypto.timingSafeEqual(Buffer.from(cookieToken), Buffer.from(headerToken))) {
-    console.warn(`[CSRF] Token mismatch at ${req.path}`);
+    console.warn(`[CSRF] Token mismatch at ${req.path}. IP: ${req.ip}`);
     return res.status(403).json({
       success: false,
-      message: 'Invalid CSRF token. Please refresh the page and try again.',
+      message: 'Your session has expired or is invalid. Please refresh the page.',
     });
   }
 
-  // Rotate token after each state-changing request
-  const newToken = generateCSRFToken();
-  const isProd = process.env.NODE_ENV === 'production';
-  res.cookie('_csrf', newToken, {
-    httpOnly: false,
-    secure: isProd,
-    sameSite: isProd ? 'None' : 'Lax',
-    maxAge: 24 * 60 * 60 * 1000,
-  });
-  res.setHeader('X-CSRF-Token', newToken);
-
+  // Removed aggressive token rotation on every request to prevent race conditions
+  // Tokens are valid for 24h as per cookie maxAge
+  
   next();
 }
 
