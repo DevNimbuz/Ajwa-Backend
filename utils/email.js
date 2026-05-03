@@ -46,27 +46,46 @@ async function sendLeadNotification(lead) {
   const to = process.env.NOTIFICATION_EMAIL || process.env.SMTP_USER || 'admin@flyajwa.com';
 
   const html = `
-    <div style="font-family:'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-      <div style="background:linear-gradient(135deg,#1e2a4a,#2a3f5f);color:#fff;padding:24px;border-radius:12px 12px 0 0;">
-        <h2 style="margin:0;font-size:20px;">🔔 New Lead — Flyajwa</h2>
-        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">
-          ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
-        </p>
+    <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background-color:#f8fafc;padding:20px;">
+      <div style="background-color:#1e2a4a;color:#ffffff;padding:32px;border-radius:12px 12px 0 0;text-align:center;">
+        <h1 style="margin:0;font-size:24px;font-weight:700;letter-spacing:-0.5px;">New Lead Received</h1>
+        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">A new traveler is interested in Flyajwa</p>
       </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;padding:24px;border-radius:0 0 12px 12px;">
+      <div style="background-color:#ffffff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
         <table style="width:100%;border-collapse:collapse;">
-          <tr><td style="padding:8px 0;color:#64748b;width:120px;">Name</td><td style="font-weight:600;">${lead.name || 'N/A'}</td></tr>
-          <tr><td style="padding:8px 0;color:#64748b;">Phone</td><td style="font-weight:600;"><a href="tel:${lead.phone}" style="color:#2563eb;">${lead.phone || 'N/A'}</a></td></tr>
-          <tr><td style="padding:8px 0;color:#64748b;">Email</td><td>${lead.email || 'N/A'}</td></tr>
-          <tr><td style="padding:8px 0;color:#64748b;">Destination</td><td><span style="background:#ecfdf5;color:#059669;padding:2px 8px;border-radius:4px;">${lead.destination || 'Not specified'}</span></td></tr>
-          <tr><td style="padding:8px 0;color:#64748b;">Source</td><td style="text-transform:capitalize;">${lead.source || 'website'}</td></tr>
+          <tr>
+            <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#64748b;font-size:14px;width:120px;">Name</td>
+            <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;">${lead.name || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#64748b;font-size:14px;">Phone</td>
+            <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#63ab45;font-weight:600;">${lead.phone || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#64748b;font-size:14px;">Email</td>
+            <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#1e293b;">${lead.email || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#64748b;font-size:14px;">Destination</td>
+            <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;"><span style="background-color:#ecfdf5;color:#059669;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;text-transform:uppercase;">${lead.destination || 'Inquiry'}</span></td>
+          </tr>
         </table>
+        <div style="margin-top:24px;padding:16px;background-color:#f8fafc;border-radius:8px;color:#475569;font-size:14px;line-height:1.6;">
+          <strong style="display:block;margin-bottom:4px;color:#1e2a4a;font-size:12px;text-transform:uppercase;">Message:</strong>
+          ${lead.message || 'No message provided.'}
+        </div>
+        <div style="margin-top:32px;text-align:center;">
+          <a href="https://flyajwa.com/admin" style="background-color:#63ab45;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;display:inline-block;">View in Dashboard</a>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:20px;color:#94a3b8;font-size:12px;">
+        © ${new Date().getFullYear()} Flyajwa Travel. All rights reserved.
       </div>
     </div>`;
 
   return sendEmailViaBrevo({
     to: [{ email: to }],
-    subject: `🔔 New Lead: ${lead.name} — ${lead.destination || 'Flyajwa'}`,
+    subject: `🔔 New Lead: ${lead.name} — Flyajwa`,
     htmlContent: html
   });
 }
@@ -76,23 +95,27 @@ async function sendLeadNotification(lead) {
  */
 async function sendOTPEmail({ email, name, otp, type }) {
   const html = `
-    <div style="font-family:'Segoe UI',sans-serif;max-width:500px;margin:0 auto;padding:20px;">
-      <div style="background:linear-gradient(135deg,#1e2a4a,#2a3f5f);color:#fff;padding:32px;border-radius:16px 16px 0 0;text-align:center;">
-        <h2 style="margin:0;font-size:22px;">Verify Your Email</h2>
-        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">Welcome to Flyajwa, ${name}!</p>
+    <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:500px;margin:0 auto;background-color:#f8fafc;padding:20px;">
+      <div style="background-color:#1e2a4a;color:#ffffff;padding:40px 20px;border-radius:16px 16px 0 0;text-align:center;">
+        <div style="background-color:rgba(255,255,255,0.1);width:60px;height:60px;border-radius:50%;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:30px;">✈️</div>
+        <h1 style="margin:0;font-size:24px;font-weight:700;">Verify Your Email</h1>
+        <p style="margin:10px 0 0;opacity:0.8;font-size:15px;">Welcome to Flyajwa, ${name}!</p>
       </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;padding:32px;border-radius:0 0 16px 16px;text-align:center;">
-        <p style="color:#334155;font-size:15px;margin:0 0 24px;">Enter this code to verify your email address:</p>
-        <div style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-radius:12px;padding:20px;margin-bottom:24px;">
-          <span style="font-family:'SF Mono',Monaco,'Courier New',monospace;font-size:36px;font-weight:800;color:#1e293b;letter-spacing:8px;">${otp}</span>
+      <div style="background-color:#ffffff;padding:40px 30px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;text-align:center;">
+        <p style="color:#475569;font-size:16px;margin:0 0 25px;">Please use the following code to complete your verification:</p>
+        <div style="background-color:#f1f5f9;border-radius:12px;padding:25px;margin-bottom:25px;border:1px dashed #cbd5e1;">
+          <span style="font-family:monospace;font-size:38px;font-weight:800;color:#1e2a4a;letter-spacing:10px;">${otp}</span>
         </div>
-        <p style="color:#94a3b8;font-size:12px;margin:0;">This code expires in <strong>10 minutes</strong>. Do not share it with anyone.</p>
+        <p style="color:#94a3b8;font-size:13px;margin:0;line-height:1.5;"> This code expires in <strong style="color:#e11d48;">10 minutes</strong>.<br>If you didn't request this, you can safely ignore this email.</p>
+      </div>
+      <div style="text-align:center;margin-top:20px;color:#94a3b8;font-size:12px;">
+        Sent by Flyajwa Security Team
       </div>
     </div>`;
 
   return sendEmailViaBrevo({
     to: [{ email }],
-    subject: `🔐 Flyajwa Email Verification Code: ${otp}`,
+    subject: `🔐 Flyajwa Verification Code: ${otp}`,
     htmlContent: html
   });
 }
@@ -102,25 +125,21 @@ async function sendOTPEmail({ email, name, otp, type }) {
  */
 async function sendPasswordResetEmail({ email, name, resetUrl }) {
   const html = `
-    <div style="font-family:'Segoe UI',sans-serif;max-width:500px;margin:0 auto;padding:20px;">
-      <div style="background:linear-gradient(135deg,#1e2a4a,#2a3f5f);color:#fff;padding:32px;border-radius:16px 16px 0 0;text-align:center;">
-        <h2 style="margin:0;font-size:22px;">Reset Your Password</h2>
-        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">Flyajwa Travel Account Recovery</p>
+    <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:500px;margin:0 auto;background-color:#f8fafc;padding:20px;">
+      <div style="background-color:#1e2a4a;color:#ffffff;padding:40px 20px;border-radius:16px 16px 0 0;text-align:center;">
+        <div style="background-color:rgba(255,255,255,0.1);width:60px;height:60px;border-radius:50%;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:30px;">🔑</div>
+        <h1 style="margin:0;font-size:24px;font-weight:700;">Reset Password</h1>
       </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;padding:32px;border-radius:0 0 16px 16px;text-align:center;">
-        <p style="color:#334155;font-size:15px;margin:0 0 24px;">Hello ${name}, you requested to reset your password. Click the button below to choose a new one:</p>
-        <a href="${resetUrl}" style="display:inline-block;background:#63ab45;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">Reset Password →</a>
-        <p style="color:#94a3b8;font-size:12px;margin:24px 0 0;">This link will expire in <strong>1 hour</strong>. If you didn't request this, you can safely ignore this email.</p>
-        <div style="margin-top:24px;padding-top:20px;border-top:1px solid #f1f5f9;font-size:11px;color:#cbd5e1;">
-          If the button doesn't work, copy and paste this link into your browser:<br>
-          <a href="${resetUrl}" style="color:#2563eb;word-break:break-all;">${resetUrl}</a>
-        </div>
+      <div style="background-color:#ffffff;padding:40px 30px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;text-align:center;">
+        <p style="color:#475569;font-size:16px;margin:0 0 25px;">Hello ${name}, click the button below to reset your Flyajwa account password:</p>
+        <a href="${resetUrl}" style="background-color:#63ab45;color:#ffffff;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;display:inline-block;box-shadow:0 4px 6px rgba(99,171,69,0.2);">Reset My Password</a>
+        <p style="color:#94a3b8;font-size:13px;margin:25px 0 0;line-height:1.5;">This link will expire in 1 hour. If you didn't request this, your password will remain unchanged.</p>
       </div>
     </div>`;
 
   return sendEmailViaBrevo({
     to: [{ email }],
-    subject: `🔐 Flyajwa Password Reset Request`,
+    subject: `🔐 Flyajwa Password Reset`,
     htmlContent: html
   });
 }
