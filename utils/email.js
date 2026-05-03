@@ -45,31 +45,22 @@ function getTransporter() {
     const user = SMTP_USER.trim();
     const pass = SMTP_PASSWORD.replace(/\s/g, ''); // Ensure no spaces
 
-    const config = isGmail 
-      ? {
-          service: 'gmail',
-          auth: { user, pass },
-          debug: true,
-          logger: true,
-          connectionTimeout: 15000,
-          greetingTimeout: 15000,
-          // Force IPv4 - often resolves Render timeouts
-          family: 4
-        }
-      : {
-          host,
-          port: parseInt(SMTP_PORT || '587'),
-          secure: parseInt(SMTP_PORT || '587') === 465,
-          auth: { user, pass },
-          tls: { rejectUnauthorized: false },
-          debug: true,
-          logger: true,
-          family: 4
-        };
+    // Manual config often works better on Render than the 'service' shorthand
+    const config = {
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // Use STARTTLS
+      auth: { user, pass },
+      debug: true,
+      logger: true,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      family: 4 // Force IPv4
+    };
 
     transporter = nodemailer.createTransport(config);
 
-    // Verify connection on creation (async check, but log result)
+    // Verify connection on creation
     transporter.verify((error, success) => {
       if (error) {
         console.error('[Email] SMTP Verification Failed:', {
