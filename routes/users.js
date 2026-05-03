@@ -10,6 +10,13 @@
  * DELETE /api/users/:id     — Delete team member
  */
 
+const express = require('express');
+const router = express.Router();
+const User = require('../models/User');
+const Lead = require('../models/Lead');
+const AuditLog = require('../models/AuditLog');
+const { requireAuth, requireSuperAdmin, requireAnyAdmin } = require('../proxy/auth');
+const { getClientIP, detectDevice } = require('../proxy/security');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { validateFile } = require('../proxy/uploadValidator');
