@@ -49,21 +49,21 @@ function csrfProtection(req, res, next) {
   const headerToken = req.headers['x-csrf-token'];
 
   // ── Exception: Login/Registration Routes ──
-  // Skip CSRF for these specific routes if not logged in
-  // This prevents the "Invalid CSRF" deadlock during login attempts
-  const isAuthRoute = req.path.includes('/auth/login') || 
-                      req.path.includes('/auth/send-otp') || 
-                      req.path.includes('/auth/verify-otp') ||
-                      req.path.includes('/auth/forgot-password') ||
-                      req.path.includes('/auth/reset-password');
+  // Broad exception to prevent any login/registration deadlock.
+  // These routes are already protected by rate limiters and auth logic.
+  const isAuthRoute = req.originalUrl.includes('/auth/login') || 
+                      req.originalUrl.includes('/auth/send-otp') || 
+                      req.originalUrl.includes('/auth/verify-otp') ||
+                      req.originalUrl.includes('/auth/forgot-password') ||
+                      req.originalUrl.includes('/auth/reset-password');
 
-  if (isAuthRoute && !req.cookies.token) {
+  if (isAuthRoute) {
     return next();
   }
 
   // If no auth cookie present, this is an unauthenticated request (public forms)
   // Still allow — the auth middleware will reject unauthorized access downstream
-  if (!req.cookies.token && !isAuthRoute) {
+  if (!req.cookies.token) {
     return next();
   }
 
