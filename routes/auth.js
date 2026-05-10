@@ -206,7 +206,6 @@ router.post('/login', [
 
     res.json({
       success: true,
-      token, // Restore token for cross-domain compatibility (Vercel -> Render)
       user: user.toSafeJSON(),
     });
   } catch (error) {
@@ -351,7 +350,6 @@ router.post('/verify-otp', [
     return res.status(201).json({
       success: true,
       message: 'Account verified successfully',
-      token, // Restore token for cross-domain compatibility
       user: user.toSafeJSON(),
     });
   } catch (error) {

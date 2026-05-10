@@ -51,6 +51,34 @@ function broadcastLead(lead) {
 }
 
 const { body, validationResult } = require('express-validator');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const { validateFile } = require('../proxy/uploadValidator');
+
+//Multer config for memory storage
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const result = validateFile(file, 'image');
+    if (result.valid) cb(null, true);
+    else cb(new Error(result.error));
+  }
+});
+
+// Cloudinary upload helper
+const uploadToCloudinary = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: 'flyajwa/payments', resource_type: 'image', format: 'webp' },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+    stream.end(buffer);
+  });
+};
 
 function buildLeadAccessFilter(user) {
   if (!user || user.role !== 'TEAM') {
@@ -104,10 +132,13 @@ router.post('/', [
       return res.status(400).json({ success: false, message: errors.array()[0].msg });
     }
 
-    const { name, email, phone, destination, packageSlug, message, source,
+    const { 
+      name, email, phone, destination, packageSlug, message, source,
       serviceType, serviceDetails,
       selectedDays, selectedFlight, selectedHotelStar, selectedGroupSize, quotedPrice,
-      utmSource, utmMedium, utmCampaign, referrer } = req.body;
+      adults, children, infants, selectedRoomType,
+      utmSource, utmMedium, utmCampaign, referrer 
+    } = req.body;
 
     if (!name || !phone) {
       return res.status(400).json({ success: false, message: 'Name and phone are required' });
@@ -513,14 +544,15 @@ router.put('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/leads/:id — Delete lead (ANY ADMIN)
+// DELETE /api/leads/:id — Delete lead (SUPER ADMIN ONLY)
 // ══════════════════════════════════════════════
-router.delete('/:id', requireAuth, requireAnyAdmin, async (req, res) => {
+router.delete('/:id', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
-    const lead = await Lead.findByIdAndDelete(req.params.id);
+    const lead = await Lead.findById(req.params.id);
     if (!lead) {
       return res.status(404).json({ success: false, message: 'Lead not found' });
     }
+    await lead.deleteOne();
     await AuditLog.create({
       action: 'USER_MUTATION',
       user: req.user._id,
@@ -580,6 +612,11 @@ router.post('/:id/redeem', requireAuth, async (req, res) => {
     const { points } = req.body;
     const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+    // Ownership check: Customers can only redeem points for their own leads
+    if (lead.customer?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Access denied: You do not own this record' });
+    }
     
     if (!lead.invoice) return res.status(400).json({ success: false, message: 'No invoice found for this booking' });
 
@@ -616,6 +653,11 @@ router.post('/:id/pay', requireAuth, async (req, res) => {
     const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
 
+    // Ownership check: Customers can only pay for their own leads
+    if (lead.customer?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Access denied: You do not own this record' });
+    }
+
     lead.paymentProof = {
       screenshot,
       status: 'PENDING',
@@ -629,6 +671,40 @@ router.post('/:id/pay', requireAuth, async (req, res) => {
     res.json({ success: true, message: 'Payment proof submitted', data: lead });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/leads/:id/upload-payment — Securely upload payment screenshot
+// ══════════════════════════════════════════════
+router.post('/:id/upload-payment', requireAuth, upload.single('file'), async (req, res) => {
+  try {
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+    // Ownership check
+    if (lead.customer?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+    const result = await uploadToCloudinary(req.file.buffer);
+    
+    lead.paymentProof = {
+      screenshot: result.secure_url,
+      status: 'PENDING',
+      uploadedAt: new Date()
+    };
+    await lead.save();
+
+    res.json({ 
+      success: true, 
+      url: result.secure_url,
+      message: 'Payment proof uploaded successfully' 
+    });
+  } catch (error) {
+    console.error('[Payment Upload Error]', error.message);
+    res.status(500).json({ success: false, message: 'Upload failed' });
   }
 });
 
