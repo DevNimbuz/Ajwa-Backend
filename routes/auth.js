@@ -206,6 +206,7 @@ router.post('/login', [
 
     res.json({
       success: true,
+      token,  // Also return in body — cross-origin cookies are unreliable (Chrome 3P cookie blocking)
       user: user.toSafeJSON(),
     });
   } catch (error) {
@@ -349,6 +350,7 @@ router.post('/verify-otp', [
 
     return res.status(201).json({
       success: true,
+      token,
       message: 'Account verified successfully',
       user: user.toSafeJSON(),
     });
@@ -695,7 +697,7 @@ router.put('/password', requireAuth, async (req, res) => {
     const token = user.generateToken();
     setTokenCookie(res, token);
 
-    res.json({ success: true, message: 'Password updated successfully and all other sessions revoked' });
+    res.json({ success: true, token, message: 'Password updated successfully and all other sessions revoked' });
   } catch (error) {
     console.error('[Auth] Password change error:', error.message);
     res.status(500).json({ success: false, message: 'Server error' });
