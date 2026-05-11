@@ -25,11 +25,17 @@ const globalLimiter = rateLimit({
 
 /**
  * Login rate limiter (strict)
- * 10 attempts per 15 minutes per IP
+ * 10 attempts per 15 minutes per IP+email combination
+ * Uses composite key so different accounts on the same IP aren't blocked together
  */
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Reduced from 10
+  max: 10,
+  keyGenerator: (req) => {
+    // Composite key: IP + lowercase email — so each account gets its own rate window
+    const email = (req.body?.email || 'unknown').toLowerCase().trim();
+    return `${req.ip}_${email}`;
+  },
   message: {
     success: false,
     message: 'Too many login attempts — please try again after 15 minutes',
